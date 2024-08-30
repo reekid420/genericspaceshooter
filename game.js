@@ -23,7 +23,7 @@ const GUNS = {
 
 const player = {
     x: 50, y: canvas.height / 2, w: 50, h: 30, baseSpeed: 5, speed: 5,
-    minSpeed: 1, maxSpeed: 30,
+    minSpeed: 1, maxSpeed: 20,
     health: 100, score: 0, lastShot: 0, invulnerable: 0,
     currentGun: 'default', gunDuration: 0
 };
@@ -134,7 +134,7 @@ function gameLoop() {
         ctx.fillText('Press Space to Restart', canvas.width / 2 - 150, canvas.height / 2 + 50);
         if (keys.Space) {
             gameOver = false;
-            player.health = 100;
+            player.health = 500;
             player.score = 0;
             bullets = [];
             enemies = [];
