@@ -45,6 +45,8 @@ const GUNS = {
     spread: { cooldown: 750, bulletSpeed: 6, bulletSize: 4, color: COLORS.guns.spread }, // Increased bullet size
     rapid: { cooldown: 50, bulletSpeed: 10, bulletSize: 4, color: COLORS.guns.rapid }
 };
+const explosionImage = new Image();
+explosionImage.src = 'explosion-removebg-preview.png';
 
 const player = {
     x: 50, y: canvas.height / 2, w: 50, h: 30, baseSpeed: 5, speed: 5,
@@ -55,7 +57,7 @@ const player = {
 
 let bullets = [], enemies = [], powerUps = [], stars = [], gameOver = false, level = 1;
 const keys = {};
-
+let explosions = [];
 // Create stars
 for (let i = 0; i < 200; i++) {
     stars.push({
@@ -368,7 +370,12 @@ function gameLoop() {
     if (keys.speedUp) player.speed = Math.min(player.maxSpeed, player.speed + 0.2);
 
     if (keys.Space || keys.shoot) shoot();
-
+ // Draw explosions
+ explosions = explosions.filter(explosion => {
+    ctx.drawImage(explosionImage, explosion.x, explosion.y, explosion.size, explosion.size);
+    explosion.duration--;
+    return explosion.duration > 0;
+});
     // Update bullet positions and draw them
     bullets = bullets.filter(b => {
         b.x += b.speed;
@@ -429,6 +436,13 @@ function gameLoop() {
                 e.health--;
                 if (e.health <= 0) {
                     player.score += e.score;
+                    // Add explosion effect
+                    explosions.push({
+                        x: e.x,
+                        y: e.y,
+                        size: e.w * 1.5, // Make explosion slightly larger than the enemy
+                        duration: 30 // Show explosion for 30 frames
+                    });
                     return false;
                 }
                 bulletHit = true;
