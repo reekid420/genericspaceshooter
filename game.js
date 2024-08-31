@@ -35,7 +35,11 @@ const COLORS = {
     powerUp: { health: '#00FF00', score: '#0000FF' }, text: '#FFFFFF',
     guns: { default: '#FFFF00', spread: '#FF00FF', rapid: '#00FFFF' }
 };
+const playerImage = new Image();
+playerImage.src = 'untitled2-removebg-preview.png';
 
+const enemyImage = new Image();
+enemyImage.src = 'untitled2.png';
 const GUNS = {
     default: { cooldown: 250, bulletSpeed: 8, bulletSize: 3, color: COLORS.guns.default },
     spread: { cooldown: 750, bulletSpeed: 6, bulletSize: 4, color: COLORS.guns.spread }, // Increased bullet size
@@ -236,43 +240,36 @@ function drawStarryBackground() {
 }
 
 function drawDetailedShip(x, y, w, h, color, isPlayer) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x, y + h / 2);
-    ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + h);
-    ctx.closePath();
-    ctx.fill();
+    if (isPlayer) {
+        ctx.drawImage(playerImage, x, y, w, h);
+    } else if (color === COLORS.enemy) {
+        ctx.drawImage(enemyImage, x, y, w, h);
+    } else {
+        // Fallback to the original drawing method for other ships
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x, y + h / 2);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x + w, y + h);
+        ctx.closePath();
+        ctx.fill();
 
-    // Add details
-    ctx.strokeStyle = isPlayer ? '#00FFFF' : '#FF00FF';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.1, y + h * 0.3);
-    ctx.lineTo(x + w * 0.4, y + h * 0.5);
-    ctx.lineTo(x + w * 0.1, y + h * 0.7);
-    ctx.stroke();
+        // Add details (window, etc.) as before
+        // ...
+    }
 
-    // Add window
-    ctx.fillStyle = '#87CEEB';
-    ctx.beginPath();
-    ctx.arc(x + w * 0.7, y + h * 0.5, h * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Add speed indicator for player
+    // Keep the speed and gun indicators for the player
     if (isPlayer) {
         const speedRatio = (player.speed - player.minSpeed) / (player.maxSpeed - player.minSpeed);
         ctx.fillStyle = `rgb(${255 * speedRatio}, ${255 * (1 - speedRatio)}, 0)`;
         ctx.fillRect(x - 10, y, 5, h);
         ctx.fillRect(x - 10, y + h * (1 - speedRatio), 5, h * speedRatio);
-    }
 
-    // Add gun indicator for player
-    if (isPlayer) {
         ctx.fillStyle = GUNS[player.currentGun].color;
         ctx.fillRect(x + w, y + h / 2 - 5, 10, 10);
     }
 }
+
 
 function spawnEnemy() {
     let type;
@@ -399,13 +396,23 @@ function gameLoop() {
     });
     powerUps = powerUps.filter(p => p.x > -p.w);
 
-    if (player.invulnerable > 0) {
-        player.invulnerable--;
-        if (player.invulnerable % 10 < 5) {
-            drawDetailedShip(player.x, player.y, player.w, player.h, 'rgba(0,255,0,0.5)', true);
+    
+    if (playerImage.complete && enemyImage.complete) {
+        if (player.invulnerable > 0) {
+            player.invulnerable--;
+            if (player.invulnerable % 10 < 5) {
+                ctx.globalAlpha = 0.5;
+                drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
+                ctx.globalAlpha = 1;
+            }
+        } else {
+            drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
         }
-    } else {
-        drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
+
+        enemies.forEach(e => {
+            e.x -= e.speed * player.speed / player.baseSpeed;
+            drawDetailedShip(e.x, e.y, e.w, e.h, e.color, false);
+        });
     }
 
     const baseSpawnRate = 0.05;
