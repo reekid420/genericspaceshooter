@@ -6,7 +6,9 @@ let gameOver = false, level = 1;
 const keys = {};
 let activeTouches = {};
 let showDebugOverlay = false;
-let lastFrameTime = Date.now();
+let lastFrameTime = performance.now();
+let frameCount = 0;
+let fps = 0;
 let showDevMenu = false;
 
 // Constants
@@ -18,17 +20,18 @@ const COLORS = {
 };
 
 const GUNS = {
-    default: { cooldown: 250, bulletSpeed: 8, bulletSize: 3, color: COLORS.guns.default },
-    spread: { cooldown: 750, bulletSpeed: 6, bulletSize: 4, color: COLORS.guns.spread },
-    rapid: { cooldown: 50, bulletSpeed: 10, bulletSize: 4, color: COLORS.guns.rapid }
+    default: { cooldown: 200, bulletSpeed: 8, bulletSize: 4, color: COLORS.guns.default },
+    spread: { cooldown: 650, bulletSpeed: 6, bulletSize: 4, color: COLORS.guns.spread },
+    rapid: { cooldown: 50, bulletSpeed: 10, bulletSize: 4, color: COLORS.guns.rapid },
+    burst: { cooldown: 500, bulletSpeed: 9, bulletSize: 4, color: '#FFA500', burstCount: 3, burstDelay: 50 }
 };
 
 const ENEMY_TYPES = {
-    basic: { health: 1, speed: 2, size: 30, color: COLORS.enemy, score: 10 },
+    basic: { health: 2, speed: 2, size: 30, color: COLORS.enemy, score: 10 },
     fast: { health: 1, speed: 4, size: 20, color: '#FF00FF', score: 20 },
     tank: { health: 3, speed: 1, size: 40, color: '#00FFFF', score: 30 },
-    miniBoss: { health: 20, speed: 1.5, size: 60, color: '#FFA500', score: 100 },
-    bigBoss: { health: 100, speed: 0.5, size: 100, color: '#FF0000', score: 500 }
+    miniBoss: { health: 20, speed: 0.5, size: 60, color: '#FFA500', score: 100 },
+    bigBoss: { health: 100, speed: 0.2, size: 100, color: '#FF0000', score: 500 }
 };
 
 // Image loading
@@ -279,7 +282,10 @@ function spawnPowerUp() {
     const type = Math.random() < 0.6 ? 'gun' : (Math.random() < 0.5 ? 'health' : 'score');
     let gunType = 'default';
     if (type === 'gun') {
-        gunType = Math.random() < 0.5 ? 'spread' : 'rapid';
+        const roll = Math.random();
+        if (roll < 0.3) gunType = 'spread';
+        else if (roll < 0.6) gunType = 'rapid';
+        else gunType = 'burst'; // Add burst gun to power-ups
     }
     powerUps.push({
         x: canvas.width, y: Math.random() * (canvas.height - 20),
@@ -298,31 +304,51 @@ function shoot() {
     const now = Date.now();
     const gun = GUNS[player.currentGun];
     if (now - player.lastShot > gun.cooldown) {
-        if (player.currentGun === 'spread') {
-            for (let layer = -1; layer <= 1; layer += 2) {
+        player.lastShot = now;
+        
+        switch (player.currentGun) {
+            case 'spread':
                 for (let i = -2; i <= 2; i++) {
-                    const angle = i * Math.PI / 18 + layer * Math.PI / 36;
-                    const speed = gun.bulletSpeed + player.speed - player.baseSpeed;
+                    const angle = i * Math.PI / 18; // Spread in a 20-degree arc
+                    const speedX = Math.cos(angle) * gun.bulletSpeed;
+                    const speedY = Math.sin(angle) * gun.bulletSpeed;
                     bullets.push({
                         x: player.x + player.w,
                         y: player.y + player.h / 2,
-                        speed: Math.cos(angle) * speed,
-                        ySpeed: Math.sin(angle) * speed,
+                        speedX: speedX + player.speed - player.baseSpeed,
+                        speedY: speedY,
                         size: gun.bulletSize,
                         color: gun.color
                     });
                 }
-            }
-        } else {
-            bullets.push({
-                x: player.x + player.w,
-                y: player.y + player.h / 2,
-                speed: gun.bulletSpeed + player.speed - player.baseSpeed,
-                size: gun.bulletSize,
-                color: gun.color
-            });
+                break;
+            
+            case 'burst':
+                for (let i = 0; i < gun.burstCount; i++) {
+                    setTimeout(() => {
+                        bullets.push({
+                            x: player.x + player.w,
+                            y: player.y + player.h / 2,
+                            speedX: gun.bulletSpeed + player.speed - player.baseSpeed,
+                            speedY: 0,
+                            size: gun.bulletSize,
+                            color: gun.color
+                        });
+                    }, i * gun.burstDelay);
+                }
+                break;
+            
+            default: // 'default' and 'rapid' guns
+                bullets.push({
+                    x: player.x + player.w,
+                    y: player.y + player.h / 2,
+                    speedX: gun.bulletSpeed + player.speed - player.baseSpeed,
+                    speedY: 0,
+                    size: gun.bulletSize,
+                    color: gun.color
+                });
+                break;
         }
-        player.lastShot = now;
     }
 }
 
@@ -335,10 +361,30 @@ function drawDebugOverlay() {
     ctx.fillText(`Player: (${player.x.toFixed(2)}, ${player.y.toFixed(2)})`, 10, 20);
     ctx.fillText(`Enemies: ${enemies.length}`, 10, 40);
     ctx.fillText(`Bullets: ${bullets.length}`, 10, 60);
-    const fps = lastFrameTime ? (1000 / (Date.now() - lastFrameTime)).toFixed(2) : 'N/A';
-    ctx.fillText(`FPS: ${fps}`, 10, 80);
+    ctx.fillText(`FPS: ${fps.toFixed(2)}`, 10, 80);
 }
+function drawDevMenu() {
+    const menuStartX = 10;
+    const menuStartY = 40;
+    const menuItemHeight = 30;
+    const menuWidth = 300;
+    const menuItemCount = 8;
 
+    ctx.fillStyle = COLORS.devMenu;
+    ctx.fillRect(menuStartX, menuStartY, menuWidth, (menuItemCount + 1) * menuItemHeight);
+    ctx.fillStyle = 'white';
+    ctx.font = '16px Arial';
+    ctx.fillText('Dev Menu', menuStartX + 10, menuStartY + 20);
+
+    const menuItems = [
+        'Set Level', 'Set Health', 'Set Gun', 'Add Score',
+        'Spawn Enemy', 'Clear Enemies', 'Toggle Invincibility', 'Toggle Debug Overlay'
+    ];
+
+    menuItems.forEach((item, index) => {
+        ctx.fillText(item, menuStartX + 10, menuStartY + (index + 2) * menuItemHeight);
+    });
+}
 function toggleDebugOverlay() {
     showDebugOverlay = !showDebugOverlay;
     console.log(`Debug overlay ${showDebugOverlay ? 'enabled' : 'disabled'}`);
@@ -346,8 +392,8 @@ function toggleDebugOverlay() {
 
 function updateAndDrawBullets() {
     bullets = bullets.filter(b => {
-        b.x += b.speed;
-        b.y += b.ySpeed || 0;
+        b.x += b.speedX;
+        b.y += b.speedY;
         ctx.fillStyle = b.color;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
@@ -498,6 +544,7 @@ function updatePlayerPosition() {
 }
 
 // Add this function definition
+
 function handleDevMenuInteraction(e) {
     if (!showDevMenu) return;
 
@@ -505,8 +552,17 @@ function handleDevMenuInteraction(e) {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    if (x >= 10 && x <= 310 && y >= 40 && y <= 340) {
-        const optionIndex = Math.floor((y - 40) / 30);
+    const menuStartX = 10;
+    const menuStartY = 40;
+    const menuItemHeight = 30;
+    const menuWidth = 300;
+    const menuItemCount = 8;
+
+    if (x >= menuStartX && x <= menuStartX + menuWidth &&
+        y >= menuStartY + menuItemHeight && y <= menuStartY + (menuItemCount + 1) * menuItemHeight) {
+        
+        const optionIndex = Math.floor((y - (menuStartY + menuItemHeight)) / menuItemHeight);
+        
         switch (optionIndex) {
             case 0:
                 const newLevel = prompt("Enter new level (1-100):", level);
@@ -517,7 +573,7 @@ function handleDevMenuInteraction(e) {
                 if (newHealth) devMenu.setHealth(parseInt(newHealth));
                 break;
             case 2:
-                const newGun = prompt("Enter new gun type (default, spread, rapid):", player.currentGun);
+                const newGun = prompt("Enter new gun type (default, spread, rapid, burst):", player.currentGun);
                 if (newGun) devMenu.setGun(newGun);
                 break;
             case 3:
@@ -540,8 +596,15 @@ function handleDevMenuInteraction(e) {
         }
     }
 }
-function gameLoop() {
-    const currentTime = Date.now();
+function gameLoop(currentTime) {
+    // Calculate FPS
+    frameCount++;
+    if (currentTime - lastFrameTime >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastFrameTime = currentTime;
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawStarryBackground();
@@ -579,9 +642,6 @@ function gameLoop() {
     if (showDevMenu) {
         drawDevMenu();
     }
-    
-    const frameTime = Date.now() - currentTime;
-    lastFrameTime = frameTime > 0 ? frameTime : 1; // Ensure we don't divide by zero
 
     if (!gameOver) {
         requestAnimationFrame(gameLoop);
@@ -683,8 +743,11 @@ function initializeGame() {
     window.devMenu = devMenu;
 
     // Initialize the game
-    initGame();
-}
+    function initGame() {
+        console.log("Game initialized");
+        requestAnimationFrame(gameLoop);
+    }
+    }
 
 // Add an event listener for DOMContentLoaded
 document.addEventListener('DOMContentLoaded', initializeGame);
