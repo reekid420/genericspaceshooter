@@ -1,4 +1,3 @@
-// Console log for script load
 console.log("Script loaded");
 
 // Canvas setup
@@ -10,7 +9,8 @@ console.log('Initial Canvas dimensions:', canvas.width, canvas.height);
 const COLORS = {
     bg: '#000033', player: '#00FF00', enemy: '#FF0000', bullet: '#FFFF00',
     powerUp: { health: '#00FF00', score: '#0000FF' }, text: '#FFFFFF',
-    guns: { default: '#FFFF00', spread: '#FF00FF', rapid: '#00FFFF' }
+    guns: { default: '#FFFF00', spread: '#FF00FF', rapid: '#00FFFF' },
+    devMenu: 'rgba(0, 0, 0, 0.8)'
 };
 
 const GUNS = {
@@ -29,13 +29,13 @@ const ENEMY_TYPES = {
 
 // Image loading
 const playerImage = new Image();
-playerImage.src = 'untitled2-removebg-preview.png';
+playerImage.src = 'images/player.png';
 
 const enemyImage = new Image();
-enemyImage.src = 'untitled2.png';
+enemyImage.src = 'images/basic&bigboss.png';
 
 const explosionImage = new Image();
-explosionImage.src = 'explosion-removebg-preview.png';
+explosionImage.src = 'images/explosion.png';
 
 // Game state variables
 let bullets = [], enemies = [], powerUps = [], stars = [], gameOver = false, level = 1;
@@ -44,14 +44,17 @@ let explosions = [];
 let activeTouches = {};
 let showDebugOverlay = false;
 let lastFrameTime = Date.now();
+let showDevMenu = false;
 
 // Player object
 const player = {
     x: 50, y: canvas.height / 2, w: 50, h: 30, baseSpeed: 5, speed: 5,
     minSpeed: 1, maxSpeed: 20,
+    damageInvulnerable: 0,
     health: 100, score: 0, lastShot: 0, invulnerable: 0,
-    currentGun: 'default', gunDuration: 0
-};
+    currentGun: 'default', gunDuration: 0,
+    invincible: false
+    };
 
 // Touch controls
 let touchControls = {};
@@ -160,6 +163,10 @@ function handleTouchEnd(e) {
 
 // Drawing functions
 function drawDetailedShip(x, y, w, h, color, isPlayer, type) {
+    if (isPlayer && player.damageInvulnerable > 0 && Math.floor(Date.now() / 100) % 2 === 0) {
+        // Skip drawing the player every other 100ms when damage invulnerable
+        return;
+    }
     if (isPlayer && playerImage.complete) {
         ctx.drawImage(playerImage, x, y, w, h);
     } else if (!isPlayer && enemyImage.complete && (type === 'basic' || type === 'bigBoss')) {
@@ -310,89 +317,6 @@ function toggleDebugOverlay() {
     console.log(`Debug overlay ${showDebugOverlay ? 'enabled' : 'disabled'}`);
 }
 
-// Main game loop
-function gameLoop() {
-    const currentTime = Date.now();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    drawStarryBackground();
-    
-    // Draw player
-    drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
-    
-    // Draw enemies
-    enemies.forEach((enemy) => {
-        drawEnemy(enemy);
-    });
-    
-    updatePlayerPosition();
-    updateAndDrawBullets();
-    updateAndDrawEnemies();
-    updateAndDrawPowerUps();
-    drawExplosions();
-    checkCollisions();
-    drawTouchControls();
-    updateGunDuration();
-    drawHUD();
-    checkLevelUp();
-
-    // Spawn enemies
-    if (Math.random() < 0.02) {  // 2% chance each frame
-        spawnEnemy();
-    }
-
-    if (showDebugOverlay) {
-        drawDebugOverlay();
-    }
-
-    lastFrameTime = currentTime;
-
-    requestAnimationFrame(gameLoop);
-}
-
-// Game loop helper functions
-function drawGameOver() {
-    drawStarryBackground();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = COLORS.text;
-    ctx.font = 'bold 40px Arial';
-    ctx.fillText(`Game Over - Score: ${player.score} - Level: ${level}`, canvas.width / 2 - 250, canvas.height / 2);
-    ctx.font = '30px Arial';
-    ctx.fillText('Press Space to Restart', canvas.width / 2 - 150, canvas.height / 2 + 50);
-    if (keys.Space) {
-        resetGame();
-    }
-}
-
-function resetGame() {
-    gameOver = false;
-    player.health = 100;
-    player.score = 0;
-    bullets = [];
-    enemies = [];
-    powerUps = [];
-    level = 1;
-    player.y = canvas.height / 2;
-    player.speed = player.baseSpeed;
-    player.currentGun = 'default';
-    player.gunDuration = 0;
-}
-
-function updatePlayerPosition() {
-    if (keys.ArrowUp && player.y > 0) player.y -= player.speed;
-    if (keys.ArrowDown && player.y < canvas.height - player.h) player.y += player.speed;
-    if (keys.ArrowLeft) player.speed = Math.max(player.minSpeed, player.speed - 0.2);
-    if (keys.ArrowRight) player.speed = Math.min(player.maxSpeed, player.speed + 0.2);
-
-    if (keys.up && player.y > 0) player.y -= player.speed;
-    if (keys.down && player.y < canvas.height - player.h) player.y += player.speed;
-    if (keys.speedDown) player.speed = Math.max(player.minSpeed, player.speed - 0.2);
-    if (keys.speedUp) player.speed = Math.min(player.maxSpeed, player.speed + 0.2);
-
-    if (keys.Space || keys.shoot) shoot();
-}
-
 function updateAndDrawBullets() {
     bullets = bullets.filter(b => {
         b.x += b.speed;
@@ -466,23 +390,27 @@ function checkBulletEnemyCollisions() {
 }
 
 function checkPlayerEnemyCollisions() {
-    if (!player.invincible && player.invulnerable === 0) {
+    if (!player.invincible && player.damageInvulnerable === 0) {
         enemies.forEach(e => {
             if (checkCollision(player, e)) {
                 player.health -= 10;
-                player.invulnerable = 60;
+                player.damageInvulnerable = 60; // Set invulnerability frames
                 if (player.health <= 0) gameOver = true;
             }
         });
+    } else if (player.damageInvulnerable > 0) {
+        player.damageInvulnerable--; // Decrease invulnerability frames
     }
 }
 
 function checkPlayerPowerUpCollisions() {
     powerUps = powerUps.filter(p => {
         if (checkCollision(player, p)) {
-            if (p.type === 'health') player.health = Math.min(100, player.health + 5);
-            else if (p.type === 'score') player.score += 50;
-            else if (p.type === 'gun') {
+            if (p.type === 'health') {
+                player.health = Math.min(100, player.health + 20);
+            } else if (p.type === 'score') {
+                player.score += 50;
+            } else if (p.type === 'gun') {
                 player.currentGun = p.gunType;
                 player.gunDuration = 600; // 10 seconds
             }
@@ -504,7 +432,7 @@ function updateGunDuration() {
 function drawHUD() {
     ctx.fillStyle = COLORS.text;
     ctx.font = 'bold 20px Arial';
-    ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Level: ${level} | Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun}`, 10, 30);
+    ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Level: ${level} | Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun} | Invulnerable: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, 30);
 }
 
 function checkLevelUp() {
@@ -523,38 +451,208 @@ function checkLevelUp() {
     }
 }
 
-// Event listeners
-window.addEventListener('resize', resizeCanvas);
+function trySpawnPowerUp() {
+    if (Math.random() < 0.005) {  // 0.5% chance each frame
+        spawnPowerUp();
+    }
+}
 
-window.addEventListener('keydown', e => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+// Main gameLoop
+function gameLoop() {
+    const currentTime = Date.now();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    drawStarryBackground();
+    
+    // Draw player
+    drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
+    
+    // Draw enemies
+    enemies.forEach((enemy) => {
+        drawEnemy(enemy);
+    });
+    
+    updatePlayerPosition();
+    updateAndDrawBullets();
+    updateAndDrawEnemies();
+    updateAndDrawPowerUps();
+    drawExplosions();
+    checkCollisions();
+    drawTouchControls();
+    updateGunDuration();
+    drawHUD();
+    checkLevelUp();
+
+    // Spawn enemies
+    if (Math.random() < 0.02) {  // 2% chance each frame
+        spawnEnemy();
+    }
+
+    // Try to spawn power-ups
+    trySpawnPowerUp();
+
+    if (showDebugOverlay) {
+        drawDebugOverlay();
+    }
+    if (showDevMenu) {
+        drawDevMenu();
+    }
+    lastFrameTime = currentTime;
+
+    requestAnimationFrame(gameLoop);
+}
+
+
+// Game loop helper functions
+function drawGameOver() {
+    drawStarryBackground();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = COLORS.text;
+    ctx.font = 'bold 40px Arial';
+    ctx.fillText(`Game Over - Score: ${player.score} - Level: ${level}`, canvas.width / 2 - 250, canvas.height / 2);
+    ctx.font = '30px Arial';
+    ctx.fillText('Press Space to Restart', canvas.width / 2 - 150, canvas.height / 2 + 50);
+    if (keys.Space) {
+        resetGame();
+    }
+}
+
+function resetGame() {
+    gameOver = false;
+    player.damageInvulnerable = 0;
+    player.health = 100;
+    player.score = 0;
+    bullets = [];
+    enemies = [];
+    powerUps = [];
+    level = 1;
+    player.y = canvas.height / 2;
+    player.speed = player.baseSpeed;
+    player.currentGun = 'default';
+    player.gunDuration = 0;
+}
+
+function drawDevMenu() {
+    ctx.fillStyle = COLORS.devMenu;
+    ctx.fillRect(10, 40, 300, 300);
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '16px Arial';
+    
+    const options = [
+        `Set Level (1-100): ${level}`,
+        `Set Health (1-100): ${player.health}`,
+        `Set Gun: ${player.currentGun}`,
+        `Add Score: ${player.score}`,
+        `Spawn Enemy`,
+        `Clear Enemies`,
+        `Toggle Invincibility: ${player.invincible ? 'ON' : 'OFF'}`,
+        `Toggle Debug Overlay: ${showDebugOverlay ? 'ON' : 'OFF'}`
+    ];
+
+    options.forEach((option, index) => {
+        ctx.fillText(option, 20, 70 + index * 30);
+    });
+}
+
+// Function to handle dev menu interactions
+function handleDevMenuInteraction(e) {
+    if (!showDevMenu) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (x >= 10 && x <= 310 && y >= 40 && y <= 340) {
+        const optionIndex = Math.floor((y - 40) / 30);
+        switch (optionIndex) {
+            case 0:
+                const newLevel = prompt("Enter new level (1-100):", level);
+                if (newLevel) devMenu.setLevel(parseInt(newLevel));
+                break;
+            case 1:
+                const newHealth = prompt("Enter new health (1-100):", player.health);
+                if (newHealth) devMenu.setHealth(parseInt(newHealth));
+                break;
+            case 2:
+                const newGun = prompt("Enter new gun type (default, spread, rapid):", player.currentGun);
+                if (newGun) devMenu.setGun(newGun);
+                break;
+            case 3:
+                const scoreToAdd = prompt("Enter score to add:", 0);
+                if (scoreToAdd) devMenu.addScore(parseInt(scoreToAdd));
+                break;
+            case 4:
+                const enemyType = prompt("Enter enemy type to spawn:", "basic");
+                if (enemyType) devMenu.spawnEnemy(enemyType);
+                break;
+            case 5:
+                devMenu.clearEnemies();
+                break;
+            case 6:
+                devMenu.toggleInvincibility();
+                break;
+            case 7:
+                devMenu.toggleDebugOverlay();
+                break;
+        }
+    }
+}
+
+// Event listeners
+window.addEventListener('keydown', (e) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
         e.preventDefault();
     }
     keys[e.code] = true;
-});
 
-window.addEventListener('keyup', e => keys[e.code] = false);
-
-window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyD') {
+    if (e.code === 'F4') {
+        e.preventDefault();
         toggleDebugOverlay();
+        console.log(`Debug overlay ${showDebugOverlay ? 'enabled' : 'disabled'}`);
+    } else if (e.code === 'F5') {
+        e.preventDefault();
+        showDevMenu = !showDevMenu;
+        console.log(`Dev menu ${showDevMenu ? 'opened' : 'closed'}`);
     }
 });
+
+
+window.addEventListener('keyup', e => keys[e.code] = false);
+canvas.addEventListener('click', handleDevMenuInteraction);
 
 canvas.addEventListener('touchstart', handleTouch, false);
 canvas.addEventListener('touchmove', handleTouch, false);
 canvas.addEventListener('touchend', handleTouchEnd, false);
 canvas.addEventListener('touchcancel', handleTouchEnd, false);
 
+// Update player position function to include WASD controls
+function updatePlayerPosition() {
+    if ((keys.ArrowUp || keys.KeyW) && player.y > 0) player.y -= player.speed;
+    if ((keys.ArrowDown || keys.KeyS) && player.y < canvas.height - player.h) player.y += player.speed;
+    if (keys.ArrowLeft || keys.KeyA) player.speed = Math.max(player.minSpeed, player.speed - 0.2);
+    if (keys.ArrowRight || keys.KeyD) player.speed = Math.min(player.maxSpeed, player.speed + 0.2);
+
+    if (keys.up && player.y > 0) player.y -= player.speed;
+    if (keys.down && player.y < canvas.height - player.h) player.y += player.speed;
+    if (keys.speedDown) player.speed = Math.max(player.minSpeed, player.speed - 0.2);
+    if (keys.speedUp) player.speed = Math.min(player.maxSpeed, player.speed + 0.2);
+
+    if (keys.Space || keys.shoot) shoot();
+}
+
+
+
+
 // Developer menu
 const devMenu = {
     setLevel: (newLevel) => {
-        level = newLevel;
-        console.log(`Level set to ${newLevel}`);
+        level = Math.max(1, Math.min(100, newLevel));
+        console.log(`Level set to ${level}`);
     },
     setHealth: (newHealth) => {
-        player.health = newHealth;
-        console.log(`Player health set to ${newHealth}`);
+        player.health = Math.max(1, Math.min(100, newHealth));
+        console.log(`Player health set to ${player.health}`);
     },
     setGun: (gunType) => {
         if (GUNS[gunType]) {
@@ -597,12 +695,13 @@ const devMenu = {
 // Make devMenu accessible globally
 window.devMenu = devMenu;
 
+
+
 // Image loading error handlers
 playerImage.onerror = () => console.error("Failed to load player image");
 enemyImage.onerror = () => console.error("Failed to load enemy image");
 explosionImage.onerror = () => console.error("Failed to load explosion image");
 
-// Initialize game
 resizeCanvas();
 createStars();
 console.log('Starting game loop');
