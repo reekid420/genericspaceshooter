@@ -10,6 +10,7 @@ let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
 let showDevMenu = false;
+let devMenuUnlocked = false;
 
 // Constants
 const COLORS = {
@@ -275,7 +276,6 @@ function spawnEnemy() {
         type: type,
         score: enemyType.score
     });
-    console.log(`Spawned ${type} enemy:`, enemies[enemies.length - 1]);
 }
 
 function spawnPowerUp() {
@@ -507,7 +507,21 @@ function drawHUD() {
     ctx.font = 'bold 20px Arial';
     ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Level: ${level} | Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun} | Invulnerable: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, 30);
 }
-
+function drawGameOver() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 50);
+    
+    ctx.font = '24px Arial';
+    ctx.fillText(`Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 10);
+    
+    ctx.font = '18px Arial';
+    ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
+}
 function checkLevelUp() {
     if (player.score >= level * 100) {
         let canLevelUp = true;
@@ -546,7 +560,7 @@ function updatePlayerPosition() {
 // Add this function definition
 
 function handleDevMenuInteraction(e) {
-    if (!showDevMenu) return;
+    if (!devMenuUnlocked || !showDevMenu) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -596,6 +610,20 @@ function handleDevMenuInteraction(e) {
         }
     }
 }
+
+function unlockDevMenu() {
+    devMenuUnlocked = true;
+    console.log("Dev menu unlocked. You can now toggle it with P.");
+}
+// Add this function to toggle the dev menu
+function toggleDevMenu() {
+    if (devMenuUnlocked) {
+        showDevMenu = !showDevMenu;
+        console.log(`Dev menu ${showDevMenu ? 'opened' : 'closed'}`);
+    } else {
+        console.log("Dev menu is locked. Use unlockDevMenu() to unlock it.");
+    }
+}
 function gameLoop(currentTime) {
     // Calculate FPS
     frameCount++;
@@ -609,44 +637,52 @@ function gameLoop(currentTime) {
     
     drawStarryBackground();
     
-    // Draw player
-    drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
-    
-    // Draw enemies
-    enemies.forEach((enemy) => {
-        drawEnemy(enemy);
-    });
-    
-    updatePlayerPosition();
-    updateAndDrawBullets();
-    updateAndDrawEnemies();
-    updateAndDrawPowerUps();
-    drawExplosions();
-    checkCollisions();
-    drawTouchControls();
-    updateGunDuration();
-    drawHUD();
-    checkLevelUp();
-
-    // Spawn enemies
-    if (Math.random() < 0.02) {  // 2% chance each frame
-        spawnEnemy();
-    }
-
-    // Try to spawn power-ups
-    trySpawnPowerUp();
-
-    if (showDebugOverlay) {
-        drawDebugOverlay();
-    }
-    if (showDevMenu) {
-        drawDevMenu();
-    }
-
     if (!gameOver) {
+        // Draw player
+        drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
+        
+        // Draw enemies
+        enemies.forEach((enemy) => {
+            drawEnemy(enemy);
+        });
+        
+        updatePlayerPosition();
+        updateAndDrawBullets();
+        updateAndDrawEnemies();
+        updateAndDrawPowerUps();
+        drawExplosions();
+        checkCollisions();
+        drawTouchControls();
+        updateGunDuration();
+        drawHUD();
+        checkLevelUp();
+
+        // Spawn enemies
+        if (Math.random() < 0.02) {  // 2% chance each frame
+            spawnEnemy();
+        }
+
+        // Try to spawn power-ups
+        trySpawnPowerUp();
+
+        if (showDebugOverlay) {
+            drawDebugOverlay();
+        }
+        if (devMenuUnlocked && showDevMenu) {
+            drawDevMenu();
+        }
+
         requestAnimationFrame(gameLoop);
     } else {
         drawGameOver();
+        // Add event listener for restart
+        window.addEventListener('keydown', handleRestart);
+    }
+}
+function handleRestart(e) {
+    if (e.code === 'Space') {
+        window.removeEventListener('keydown', handleRestart);
+        initGame();
     }
 }
 const devMenu = {
@@ -703,6 +739,10 @@ function initializeGame() {
     }
     ctx = canvas.getContext('2d');
 
+    // Set canvas size
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
     // Touch event listeners
     canvas.addEventListener('touchstart', handleTouch, false);
     canvas.addEventListener('touchmove', handleTouch, false);
@@ -712,10 +752,10 @@ function initializeGame() {
     // Click listener for dev menu
     canvas.addEventListener('click', handleDevMenuInteraction);
 
-   
     // Window event listeners
-    window.addEventListener('keydown', (e) => {
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+     // Update the keydown event listener
+     window.addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
             e.preventDefault();
         }
         keys[e.code] = true;
@@ -724,10 +764,14 @@ function initializeGame() {
             e.preventDefault();
             toggleDebugOverlay();
             console.log(`Debug overlay ${showDebugOverlay ? 'enabled' : 'disabled'}`);
-        } else if (e.code === 'F5') {
+        } else if (e.code === 'KeyP') {
             e.preventDefault();
-            showDevMenu = !showDevMenu;
-            console.log(`Dev menu ${showDevMenu ? 'opened' : 'closed'}`);
+            if (devMenuUnlocked) {
+                showDevMenu = !showDevMenu;
+                console.log(`Dev menu ${showDevMenu ? 'opened' : 'closed'}`);
+            } else {
+                console.log("Dev menu is locked. Use unlockDevMenu() to unlock it.");
+            }
         }
     });
 
@@ -739,15 +783,53 @@ function initializeGame() {
     enemyImage.onerror = () => console.error("Failed to load enemy image");
     explosionImage.onerror = () => console.error("Failed to load explosion image");
 
-    // Make devMenu accessible globally
+    // Make devMenu and unlockDevMenu accessible globally
     window.devMenu = devMenu;
+    window.unlockDevMenu = unlockDevMenu;
 
     // Initialize the game
-    function initGame() {
-        console.log("Game initialized");
-        requestAnimationFrame(gameLoop);
-    }
-    }
+    initGame();
+}
+
+function initGame() {
+    console.log("Game initialized");
+    
+    // Initialize player
+    player = {
+        x: 50,
+        y: canvas.height / 2,
+        w: 50,
+        h: 30,
+        baseSpeed: 5,
+        speed: 5,
+        minSpeed: 1,
+        maxSpeed: 20,
+        damageInvulnerable: 0,
+        health: 100,
+        score: 0,
+        lastShot: 0,
+        invulnerable: 0,
+        currentGun: 'default',
+        gunDuration: 0,
+        invincible: false
+    };
+
+    // Reset game state
+    bullets = [];
+    enemies = [];
+    powerUps = [];
+    explosions = [];
+    gameOver = false;
+    level = 1;
+    showDebugOverlay = false;
+    showDevMenu = false;
+
+    // Create stars
+    createStars();
+
+    // Start the game loop
+    requestAnimationFrame(gameLoop);
+}
 
 // Add an event listener for DOMContentLoaded
 document.addEventListener('DOMContentLoaded', initializeGame);
