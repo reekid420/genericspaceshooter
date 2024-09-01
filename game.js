@@ -135,12 +135,13 @@ function drawStarryBackground() {
 // Touch controls
 function updateTouchControls() {
     const buttonSize = Math.min(80, canvas.width / 8);
+    const gap = 5;
     touchControls = {
-        up: { x: 10, y: canvas.height - buttonSize * 2 - 10, w: buttonSize, h: buttonSize },
-        down: { x: 10, y: canvas.height - buttonSize - 5, w: buttonSize, h: buttonSize },
-        speedDown: { x: canvas.width - buttonSize * 2 - 10, y: canvas.height - buttonSize * 2 - 10, w: buttonSize, h: buttonSize },
-        speedUp: { x: canvas.width - buttonSize * 2 - 10, y: canvas.height - buttonSize - 5, w: buttonSize, h: buttonSize },
-        shoot: { x: canvas.width - buttonSize - 5, y: canvas.height - buttonSize - 5, w: buttonSize, h: buttonSize }
+        up: { x: 10, y: canvas.height - buttonSize * 3 - gap * 2, w: buttonSize, h: buttonSize },
+        down: { x: 10, y: canvas.height - buttonSize - gap, w: buttonSize, h: buttonSize },
+        speedDown: { x: canvas.width - buttonSize * 3 - gap * 2, y: canvas.height - buttonSize - gap, w: buttonSize, h: buttonSize },
+        speedUp: { x: canvas.width - buttonSize - gap, y: canvas.height - buttonSize - gap, w: buttonSize, h: buttonSize },
+        shoot: { x: canvas.width - buttonSize * 2 - gap, y: canvas.height - buttonSize * 2 - gap * 2, w: buttonSize, h: buttonSize }
     };
 }
 
@@ -161,6 +162,9 @@ function drawTouchControls() {
 function handleTouch(e) {
     e.preventDefault();
     const touches = e.touches;
+    // Reset all touch-related keys
+    keys.up = keys.down = keys.speedUp = keys.speedDown = keys.shoot = false;
+    
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
         const x = touch.clientX;
@@ -168,7 +172,6 @@ function handleTouch(e) {
         for (const control in touchControls) {
             const { x: cx, y: cy, w, h } = touchControls[control];
             if (x >= cx && x <= cx + w && y >= cy && y <= cy + h) {
-                activeTouches[touch.identifier] = control;
                 keys[control] = true;
                 if (control === 'shoot') {
                     shoot();
@@ -180,14 +183,23 @@ function handleTouch(e) {
 
 function handleTouchEnd(e) {
     e.preventDefault();
-    const touches = e.changedTouches;
-    for (let i = 0; i < touches.length; i++) {
-        const touch = touches[i];
-        if (activeTouches[touch.identifier]) {
-            keys[activeTouches[touch.identifier]] = false;
-            delete activeTouches[touch.identifier];
-        }
+    if (e.touches.length === 0) {
+        // Reset all touch-related keys when all fingers are lifted
+        keys.up = keys.down = keys.speedUp = keys.speedDown = keys.shoot = false;
+    } else {
+        // Re-evaluate active touches
+        handleTouch(e);
     }
+}
+
+// Update the updatePlayerPosition function to use the new keys
+function updatePlayerPosition() {
+    if ((keys.ArrowUp || keys.KeyW || keys.up) && player.y > 0) player.y -= player.speed;
+    if ((keys.ArrowDown || keys.KeyS || keys.down) && player.y < canvas.height - player.h) player.y += player.speed;
+    if (keys.ArrowLeft || keys.KeyA || keys.speedDown) player.speed = Math.max(player.minSpeed, player.speed - 0.2);
+    if (keys.ArrowRight || keys.KeyD || keys.speedUp) player.speed = Math.min(player.maxSpeed, player.speed + 0.2);
+
+    if (keys.Space || keys.shoot) shoot();
 }
 
 // Drawing functions
@@ -522,6 +534,12 @@ function drawGameOver() {
     ctx.font = '18px Arial';
     ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
 }
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    updateTouchControls();
+    console.log('Resized canvas dimensions:', canvas.width, canvas.height);
+}
 function checkLevelUp() {
     if (player.score >= level * 100) {
         let canLevelUp = true;
@@ -744,10 +762,11 @@ function initializeGame() {
     canvas.height = window.innerHeight;
 
     // Touch event listeners
-    canvas.addEventListener('touchstart', handleTouch, false);
-    canvas.addEventListener('touchmove', handleTouch, false);
-    canvas.addEventListener('touchend', handleTouchEnd, false);
-    canvas.addEventListener('touchcancel', handleTouchEnd, false);
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    canvas.addEventListener('touchmove', handleTouch, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
 
     // Click listener for dev menu
     canvas.addEventListener('click', handleDevMenuInteraction);
@@ -823,7 +842,7 @@ function initGame() {
     level = 1;
     showDebugOverlay = false;
     showDevMenu = false;
-
+    updateTouchControls();
     // Create stars
     createStars();
 
