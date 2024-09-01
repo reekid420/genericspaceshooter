@@ -2,23 +2,43 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Space Shooter Game</title>
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-        }
-        canvas {
-            display: block;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Game Portal</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
+    <div id="home-screen">
+        <h1>Game Portal</h1>
+        <div id="game-list">
+            <div class="game-item" data-game="space-shooter">
+                <h2>Space Shooter</h2>
+                <p>Defend the galaxy in this exciting space adventure!</p>
+                <button onclick="startGame('space-shooter')">Play</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-screen" style="display: none;">
+        <canvas id="gameCanvas"></canvas>
+        <button id="back-button" onclick="showHomeScreen()">Back to Home</button>
+    </div>
+
     <script src="game.js"></script>
+    <script>
+        function startGame(gameName) {
+            document.getElementById('home-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            if (gameName === 'space-shooter') {
+                initGame();
+            }
+        }
+
+        function showHomeScreen() {
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('home-screen').style.display = 'block';
+            // Add any necessary cleanup for the current game here
+        }
+    </script>
 </body>
 </html>
