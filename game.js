@@ -11,6 +11,8 @@ let fps = 0;
 let showDevMenu = false;
 let devMenuUnlocked = false;
 let isUsingKeyboard = false;
+let lastKeyboardY = 0;
+let lastKeyboardSpeed = 5;
 
 // Constants
 const COLORS = {
@@ -53,6 +55,8 @@ let touchControls = {};
 let activeSlider = null;
 
 function initGame() {
+    window.removeEventListener('keydown', handleRestart);
+canvas.removeEventListener('touchstart', handleRestart);
     console.log("Game initialized");
     
     canvas = document.getElementById('gameCanvas');
@@ -161,20 +165,7 @@ function handleTouch(e) {
     
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
-        const x = touch.clientX;
-        const y = touch.clientY;
-        
-        for (const control of ['moveSlider', 'speedSlider']) {
-            const slider = touchControls[control];
-            if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
-                slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
-                activeSlider = control;
-            }
-        }
-        
-        if (checkCollision({x: x, y: y, w: 1, h: 1}, touchControls.shoot)) {
-            keys.shoot = true;
-        }
+        handleSingleTouch(touch);
     }
 }
 
@@ -185,56 +176,65 @@ function handleTouchMove(e) {
     
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
-        const x = touch.clientX;
-        const y = touch.clientY;
-        
-        if (activeSlider) {
-            const slider = touchControls[activeSlider];
-            if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
-                slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
-            }
-        }
+        handleSingleTouch(touch);
     }
 }
 
 function handleTouchEnd(e) {
     e.preventDefault();
-    activeSlider = null;
-    
     const touches = e.touches;
     if (touches.length === 0) {
+        activeSlider = null;
         keys.shoot = false;
     }
 }
+
+function handleSingleTouch(touch) {
+    const x = touch.clientX;
+    const y = touch.clientY;
+    
+    for (const control of ['moveSlider', 'speedSlider']) {
+        const slider = touchControls[control];
+        if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
+            slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
+            activeSlider = control;
+            return; // Exit the function if we've handled a slider
+        }
+    }
+    
+    if (checkCollision({x: x, y: y, w: 1, h: 1}, touchControls.shoot)) {
+        keys.shoot = true;
+    } else {
+        activeSlider = null; // Reset active slider if touch is outside any control
+    }
+}
+
 
 function updatePlayerPosition() {
     let moveY = 0;
     let speedChange = 0;
 
-    // Keyboard controls
-    if (keys.ArrowUp || keys.KeyW) {
-        moveY = -player.speed;
-        isUsingKeyboard = true;
-    } else if (keys.ArrowDown || keys.KeyS) {
-        moveY = player.speed;
-        isUsingKeyboard = true;
-    }
-
-    if (keys.ArrowLeft || keys.KeyA) {
-        speedChange = -0.2;
-        isUsingKeyboard = true;
-    } else if (keys.ArrowRight || keys.KeyD) {
-        speedChange = 0.2;
-        isUsingKeyboard = true;
-    }
-
-    // If using keyboard, update player position and speed
     if (isUsingKeyboard) {
+        if (keys.ArrowUp || keys.KeyW) {
+            moveY = -player.speed;
+        } else if (keys.ArrowDown || keys.KeyS) {
+            moveY = player.speed;
+        }
+
+        if (keys.ArrowLeft || keys.KeyA) {
+            speedChange = -0.2;
+        } else if (keys.ArrowRight || keys.KeyD) {
+            speedChange = 0.2;
+        }
+
+        // Update position
         player.y += moveY;
         player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+
+        // Update speed
         player.speed = Math.max(player.minSpeed, Math.min(player.maxSpeed, player.speed + speedChange));
     } else {
-        // If not using keyboard, use touch controls
+        // Touch controls
         const moveValue = touchControls.moveSlider.value;
         const speedValue = touchControls.speedSlider.value;
         
@@ -242,8 +242,13 @@ function updatePlayerPosition() {
         player.speed = player.minSpeed + (player.maxSpeed - player.minSpeed) * speedValue;
     }
 
+    // Shooting
     if (keys.Space || keys.shoot) shoot();
 }
+
+
+
+
 
 function resetControls() {
     isUsingKeyboard = false;
@@ -713,7 +718,7 @@ function gameLoop(currentTime) {
         updateGunDuration();
         drawHUD();
         checkLevelUp();
-
+        
         if (Math.random() < 0.02) {
             spawnEnemy();
         }
@@ -730,26 +735,23 @@ function gameLoop(currentTime) {
         requestAnimationFrame(gameLoop);
     } else {
         drawGameOver();
-        window.removeEventListener('keydown', handleRestart);
-        canvas.addEventListener('touchstart', handleRestart, { once: true });
+        window.addEventListener('keydown', handleRestart);
+        canvas.addEventListener('touchstart', handleRestart);
     }
 }
 
 function handleRestart(e) {
-    e.preventDefault();
-    initGame();
+    if (e.code === 'Space' || e.type === 'touchstart') {
+        e.preventDefault();
+        initGame();
+    }
 }
 
 function handleKeyUp(e) {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
         keys[e.code] = false;
     }
-    
-    if (!keys.ArrowUp && !keys.ArrowDown && !keys.ArrowLeft && !keys.ArrowRight && 
-        !keys.KeyW && !keys.KeyA && !keys.KeyS && !keys.KeyD) {
-            isUsingKeyboard = false;
-        }
-    }
+}
     
     const devMenu = {
         setLevel: (newLevel) => {
@@ -821,13 +823,14 @@ function handleKeyUp(e) {
     
         canvas.addEventListener('click', handleDevMenuInteraction);
     
+        // Modify the keydown event listener in the initializeGame function
         window.addEventListener('keydown', (e) => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
                 e.preventDefault();
                 keys[e.code] = true;
                 isUsingKeyboard = true;
             }
-    
+        
             if (e.code === 'F4') {
                 e.preventDefault();
                 toggleDebugOverlay();
