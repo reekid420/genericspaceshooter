@@ -165,20 +165,7 @@ function handleTouch(e) {
     
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
-        const x = touch.clientX;
-        const y = touch.clientY;
-        
-        for (const control of ['moveSlider', 'speedSlider']) {
-            const slider = touchControls[control];
-            if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
-                slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
-                activeSlider = control;
-            }
-        }
-        
-        if (checkCollision({x: x, y: y, w: 1, h: 1}, touchControls.shoot)) {
-            keys.shoot = true;
-        }
+        handleSingleTouch(touch);
     }
 }
 
@@ -189,58 +176,77 @@ function handleTouchMove(e) {
     
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
-        const x = touch.clientX;
-        const y = touch.clientY;
-        
-        if (activeSlider) {
-            const slider = touchControls[activeSlider];
-            if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
-                slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
-            }
-        }
+        handleSingleTouch(touch);
     }
 }
 
 function handleTouchEnd(e) {
     e.preventDefault();
-    activeSlider = null;
-    
     const touches = e.touches;
     if (touches.length === 0) {
+        activeSlider = null;
         keys.shoot = false;
     }
 }
+
+function handleSingleTouch(touch) {
+    const x = touch.clientX;
+    const y = touch.clientY;
+    
+    for (const control of ['moveSlider', 'speedSlider']) {
+        const slider = touchControls[control];
+        if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
+            slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
+            activeSlider = control;
+            return; // Exit the function if we've handled a slider
+        }
+    }
+    
+    if (checkCollision({x: x, y: y, w: 1, h: 1}, touchControls.shoot)) {
+        keys.shoot = true;
+    } else {
+        activeSlider = null; // Reset active slider if touch is outside any control
+    }
+}
+
 
 function updatePlayerPosition() {
     let moveY = 0;
     let speedChange = 0;
 
-    if (keys.ArrowUp || keys.KeyW) {
-        moveY = -player.speed;
-    } else if (keys.ArrowDown || keys.KeyS) {
-        moveY = player.speed;
+    if (isUsingKeyboard) {
+        if (keys.ArrowUp || keys.KeyW) {
+            moveY = -player.speed;
+        } else if (keys.ArrowDown || keys.KeyS) {
+            moveY = player.speed;
+        }
+
+        if (keys.ArrowLeft || keys.KeyA) {
+            speedChange = -0.2;
+        } else if (keys.ArrowRight || keys.KeyD) {
+            speedChange = 0.2;
+        }
+
+        // Update position
+        player.y += moveY;
+        player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
+
+        // Update speed
+        player.speed = Math.max(player.minSpeed, Math.min(player.maxSpeed, player.speed + speedChange));
+    } else {
+        // Touch controls
+        const moveValue = touchControls.moveSlider.value;
+        const speedValue = touchControls.speedSlider.value;
+        
+        player.y = (1 - moveValue) * (canvas.height - player.h);
+        player.speed = player.minSpeed + (player.maxSpeed - player.minSpeed) * speedValue;
     }
-
-    if (keys.ArrowLeft || keys.KeyA) {
-        speedChange = -0.2;
-    } else if (keys.ArrowRight || keys.KeyD) {
-        speedChange = 0.2;
-    }
-
-    // Update position
-    player.y += moveY;
-    player.y = Math.max(0, Math.min(canvas.height - player.h, player.y));
-
-    // Update speed
-    player.speed = Math.max(player.minSpeed, Math.min(player.maxSpeed, player.speed + speedChange));
 
     // Shooting
     if (keys.Space || keys.shoot) shoot();
-
-    
 }
 
-// Add this function to your code
+
 
 
 
