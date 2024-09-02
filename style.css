@@ -1,0 +1,52 @@
+ body{
+  padding: 0px;
+  margin: 0px;
+}
+     
+header{
+  padding: 0px;
+  margin: 0px; 
+}
+    
+.social-links {
+  display: flex;
+  justify-content: right;
+  gap: 20px;
+  padding: 3px;
+  padding-right: 7px;
+  font-family: sans-serif;
+}
+        
+.social-link {
+  display: flex;
+  align-items: right;
+  color: white;
+  text-decoration: none;
+  font-size: 16px;
+}
+        
+.social-link img {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
+
+button {
+  border: none;
+  border-radius: 5px;
+  padding: 10px;
+  cursor: pointer;
+  margin: 10px;
+}
+
+button img {
+  width: 250px;
+  height: 200px;
+  margin-bottom: 10px;
+}
+
+button span {
+  font-size: 16px;
+  font-weight: bold;
+  display: block;
+}
