@@ -7,15 +7,26 @@
     <title>Game Portal</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        .social-links {
+    body{
+      padding: 0px;
+      margin: 0px;
+    }
+     
+     header{
+      padding: 0px;
+      margin: 0px;
+    }
+     .social-links {
             display: flex;
-            justify-content: center;
+            justify-content: right;
             gap: 20px;
-            margin-top: 20px;
+            padding: 3px;
+            padding-right: 7px;
+            font-family: sans-serif;
         }
         .social-link {
             display: flex;
-            align-items: center;
+            align-items: right;
             color: white;
             text-decoration: none;
             font-size: 16px;
@@ -25,49 +36,44 @@
             height: 24px;
             margin-right: 8px;
         }
+        button {
+           border: none;
+           border-radius: 5px;
+           padding: 10px;
+           cursor: pointer;
+           margin: 30px;
+        }
+
+       button img {
+          width: 250px;
+          height: 200px;
+          margin-bottom: 10px;
+       }
+
+      button span {
+         font-size: 16px;
+         font-weight: bold;
+         display: block;
+      }
     </style>
 </head>
-<body>
-    <div id="home-screen">
-        <h1>Game Portal</h1>
-
-        <div id="game-list">
-            <div class="game-item" data-game="space-shooter">
-                <h2>Space Shooter</h2>
-                <p>Defend the galaxy in this exciting space adventure!</p>
-                <button onclick="startGame('space-shooter')">Play</button>
-            </div>
-        </div>
-
+<body background="bg.jpeg">
+  <header>
         <div class="social-links">
             <a href="https://github.com/reekid96/genericspaceshooter" target="_blank" class="social-link">
                 <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo">
-                GitHub
+                <b>GitHub</b>
             </a>
             <a href="https://discord.gg/jxV93SwN" target="_blank" class="social-link">
                 <img src="https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6a49cf127bf92de1e2_icon_clyde_blurple_RGB.png" alt="Discord Logo">
-                Discord
+                <b>Discord</b>
             </a>
         </div>
-    </div>
-
-    <div id="game-screen" style="display: none;">
-        <button id="back-button" onclick="goBack()">Back to Home</button>
-        <canvas id="gameCanvas"></canvas>
-    </div>
-
-    <script src="game.js"></script>
-    <script>
-        function startGame(game) {
-            document.getElementById('home-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'block';
-            initGame();
-        }
-
-        function goBack() {
-            document.getElementById('game-screen').style.display = 'none';
-            document.getElementById('home-screen').style.display = 'block';
-        }
-    </script>
+  </header>
+  
+    <a href="spaceshooter/spaceshooter.html"><button>
+  <img src="images/logo.png" alt="logo">
+  <span>SPACE SHOOTER</span>
+</button></a>
 </body>
 </html>

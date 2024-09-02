@@ -42,15 +42,15 @@ const ENEMY_TYPES = {
 
 // Image loading
 const playerImage = new Image();
-playerImage.src = 'images/player.png';
+playerImage.src = '../images/player.png';
 
 const enemyImage = new Image();
-enemyImage.src = 'images/basic&bigboss.png';
+enemyImage.src = '../images/basic&bigboss.png';
 
 const explosionImage = new Image();
-explosionImage.src = 'images/explosion.png';
+explosionImage.src = '../images/explosion.png';
 const finalBossImage = new Image();
-finalBossImage.src = 'images/final-boss.png';
+finalBossImage.src = '../images/final-boss.png';
 
 // Player object
 let player;
@@ -98,6 +98,7 @@ function resizeCanvas() {
     updateTouchControls();
     console.log('Resized canvas dimensions:', canvas.width, canvas.height);
 }
+
 
 function createStars() {
     for (let i = 0; i < 200; i++) {
@@ -971,8 +972,11 @@ function initializeGame() {
     }
     ctx = canvas.getContext('2d');
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Set initial canvas size
+    resizeCanvas();
+
+    // Add event listener for window resize
+    window.addEventListener('resize', resizeCanvas);
 
     canvas.removeEventListener('touchstart', handleTouch);
     canvas.removeEventListener('touchmove', handleTouchMove);
