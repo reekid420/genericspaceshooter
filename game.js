@@ -13,6 +13,8 @@ let devMenuUnlocked = false;
 let isUsingKeyboard = false;
 let lastKeyboardY = 0;
 let lastKeyboardSpeed = 5;
+let boss = null;
+let bossPhase = 0;
 
 // Constants
 const COLORS = {
@@ -34,7 +36,8 @@ const ENEMY_TYPES = {
     fast: { health: 1, speed: 4, size: 20, color: '#FF00FF', score: 20 },
     tank: { health: 3, speed: 1, size: 40, color: '#00FFFF', score: 30 },
     miniBoss: { health: 20, speed: 0.5, size: 60, color: '#FFA500', score: 100 },
-    bigBoss: { health: 100, speed: 0.2, size: 100, color: '#FF0000', score: 500 }
+    bigBoss: { health: 100, speed: 0.2, size: 100, color: '#FF0000', score: 500 },
+    finalBoss: { health: 1000, speed: 2, size: 150, color: '#FF1493', score: 10000 }
 };
 
 // Image loading
@@ -46,6 +49,8 @@ enemyImage.src = 'images/basic&bigboss.png';
 
 const explosionImage = new Image();
 explosionImage.src = 'images/explosion.png';
+const finalBossImage = new Image();
+finalBossImage.src = 'images/final-boss.png';
 
 // Player object
 let player;
@@ -56,7 +61,7 @@ let activeSlider = null;
 
 function initGame() {
     window.removeEventListener('keydown', handleRestart);
-canvas.removeEventListener('touchstart', handleRestart);
+    canvas.removeEventListener('touchstart', handleRestart);
     console.log("Game initialized");
     
     canvas = document.getElementById('gameCanvas');
@@ -78,6 +83,8 @@ canvas.removeEventListener('touchstart', handleRestart);
     gameOver = false; level = 1;
     showDebugOverlay = false;
     showDevMenu = false;
+    boss = null;
+    bossPhase = 0;
 
     resizeCanvas();
     createStars();
@@ -209,7 +216,6 @@ function handleSingleTouch(touch) {
     }
 }
 
-
 function updatePlayerPosition() {
     let moveY = 0;
     let speedChange = 0;
@@ -245,10 +251,6 @@ function updatePlayerPosition() {
     // Shooting
     if (keys.Space || keys.shoot) shoot();
 }
-
-
-
-
 
 function resetControls() {
     isUsingKeyboard = false;
@@ -357,7 +359,7 @@ function spawnPowerUp() {
     }
     powerUps.push({
         x: canvas.width, y: Math.random() * (canvas.height - 20),
-        w: 20, h: 20,type: type,
+        w:20, h: 20, type: type,
         gunType: gunType
     });
 }
@@ -508,7 +510,11 @@ function checkCollisions() {
 
 function checkBulletEnemyCollisions() {
     bullets = bullets.filter(b => {
+        if (b.fromBoss) return true; // Don't remove boss bullets here
+
         let bulletHit = false;
+
+        // Check collision with regular enemies
         enemies = enemies.filter(e => {
             if (!bulletHit && checkCollision({x: b.x - b.size, y: b.y - b.size, w: b.size * 2, h: b.size * 2}, e)) {
                 e.health--;
@@ -526,10 +532,26 @@ function checkBulletEnemyCollisions() {
             }
             return true;
         });
+
+        // Check collision with final boss
+        if (!bulletHit && boss && checkCollision({x: b.x - b.size, y: b.y - b.size, w: b.size * 2, h: b.size * 2}, boss)) {
+            boss.health--;
+            if (boss.health <= 0) {
+                player.score += ENEMY_TYPES.finalBoss.score;
+                explosions.push({
+                    x: boss.x,
+                    y: boss.y,
+                    size: boss.w * 1.5,
+                    duration: 30
+                });
+                showCongratulationsScreen();
+            }
+            bulletHit = true;
+        }
+
         return !bulletHit;
     });
 }
-
 function checkPlayerEnemyCollisions() {
     if (!player.invincible && player.damageInvulnerable === 0) {
         enemies.forEach(e => {
@@ -613,6 +635,15 @@ function checkLevelUp() {
             level++;
             player.health = Math.min(100, player.health + 20);
             console.log('Level increased to:', level);
+
+            if (level === 100) {
+                enemies = []; // Clear all enemies
+                createFinalBoss();
+            }
+
+            if (level > 100) {
+                bossPhase = (bossPhase + 1) % 3; // Cycle through boss phases
+            }
         }
     }
 }
@@ -689,6 +720,119 @@ function toggleDevMenu() {
     }
 }
 
+function createFinalBoss() {
+    boss = {
+        x: canvas.width - 200,
+        y: canvas.height / 2,
+        w: ENEMY_TYPES.finalBoss.size,
+        h: ENEMY_TYPES.finalBoss.size,
+        health: ENEMY_TYPES.finalBoss.health,
+        maxHealth: ENEMY_TYPES.finalBoss.health,
+        color: ENEMY_TYPES.finalBoss.color,
+        direction: 1,
+        lastShot: 0
+    };
+    bossPhase = 0; // Initialize bossPhase when creating the boss
+}
+
+function updateAndDrawBoss() {
+    if (!boss) return;
+
+    // Move boss up and down
+    boss.y += boss.direction * ENEMY_TYPES.finalBoss.speed;
+    if (boss.y <= 0 || boss.y + boss.h >= canvas.height) {
+        boss.direction *= -1;
+    }
+
+    // Draw boss using the image
+    if (finalBossImage.complete) {
+        ctx.drawImage(finalBossImage, boss.x, boss.y, boss.w, boss.h);
+    } else {
+        // Fallback to rectangle if image hasn't loaded
+        ctx.fillStyle = boss.color;
+        ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
+    }
+
+    // Draw boss health bar
+    const healthPercentage = boss.health / boss.maxHealth;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(boss.x, boss.y - 20, boss.w, 10);
+    ctx.fillStyle = 'green';
+    ctx.fillRect(boss.x, boss.y - 20, boss.w * healthPercentage, 10);
+
+    // Boss shooting
+    const now = Date.now();
+    if (now - boss.lastShot > 1000) { // Shoot every second
+        boss.lastShot = now;
+        bossShoot(); // Fixed typo here
+    }
+}
+
+function bossShoot() {
+    switch(bossPhase) {
+        case 0: // Single bullet
+            createBossBullet(0);
+            break;
+        case 1: // Three-way spread
+            for (let i = -1; i <= 1; i++) {
+                createBossBullet(i * Math.PI / 12);
+            }
+            break;
+        case 2: // Circle pattern
+            for (let i = 0; i < 8; i++) {
+                createBossBullet(i * Math.PI / 4);
+            }
+            break;
+    }
+}
+
+function createBossBullet(angle) {
+    const speed = 5;
+    bullets.push({
+        x: boss.x,
+        y: boss.y + boss.h / 2,
+        speedX: -Math.cos(angle) * speed,
+        speedY: Math.sin(angle) * speed,
+        size: 8,
+        color: 'red',
+        fromBoss: true
+    });
+}
+
+function checkBossBulletCollisions() {
+    bullets = bullets.filter(b => {
+        if (b.fromBoss && checkCollision(player, {x: b.x - b.size, y: b.y - b.size, w: b.size * 2, h: b.size * 2})) {
+            player.health -= 10;
+            if (player.health <= 0) gameOver = true;
+            return false;
+        }
+        return true;
+    });
+}
+
+function checkPlayerBossCollisions() {
+    if (boss && checkCollision(player, boss)) {
+        player.health -= 20;
+        if (player.health <= 0) gameOver = true;
+    }
+}
+
+function showCongratulationsScreen() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Congratulations!', canvas.width / 2, canvas.height / 2 - 50);
+    ctx.font = '24px Arial';
+    ctx.fillText(`You beat the game! Final Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 10);
+    ctx.font = '18px Arial';
+    ctx.fillText('Press SPACE to start a new game+', canvas.width / 2, canvas.height / 2 + 50);
+
+    gameOver = true;
+}
+
 function gameLoop(currentTime) {
     frameCount++;
     if (currentTime - lastFrameTime >= 1000) {
@@ -704,9 +848,23 @@ function gameLoop(currentTime) {
     if (!gameOver) {
         drawDetailedShip(player.x, player.y, player.w, player.h, COLORS.player, true);
         
-        enemies.forEach((enemy) => {
-            drawEnemy(enemy);
-        });
+        if (level === 100 && !boss) {
+            createFinalBoss();
+        }
+
+        if (boss) {
+            updateAndDrawBoss();
+            checkBossBulletCollisions();
+            checkPlayerBossCollisions();
+        } else {
+            enemies.forEach((enemy) => {
+                drawEnemy(enemy);
+            });
+            
+            if (Math.random() < 0.02) {
+                spawnEnemy();
+            }
+        }
         
         updatePlayerPosition();
         updateAndDrawBullets();
@@ -718,10 +876,6 @@ function gameLoop(currentTime) {
         updateGunDuration();
         drawHUD();
         checkLevelUp();
-        
-        if (Math.random() < 0.02) {
-            spawnEnemy();
-        }
 
         trySpawnPowerUp();
 
@@ -734,7 +888,11 @@ function gameLoop(currentTime) {
 
         requestAnimationFrame(gameLoop);
     } else {
-        drawGameOver();
+        if (boss && boss.health <= 0) {
+            showCongratulationsScreen();
+        } else {
+            drawGameOver();
+        }
         window.addEventListener('keydown', handleRestart);
         canvas.addEventListener('touchstart', handleRestart);
     }
@@ -743,7 +901,12 @@ function gameLoop(currentTime) {
 function handleRestart(e) {
     if (e.code === 'Space' || e.type === 'touchstart') {
         e.preventDefault();
+        const currentScore = player.score;
         initGame();
+        player.score = currentScore;
+        level = boss ? 1 : level; // Reset to level 1 if boss was defeated
+        boss = null;
+        bossPhase = 0;
     }
 }
 
@@ -752,109 +915,108 @@ function handleKeyUp(e) {
         keys[e.code] = false;
     }
 }
-    
-    const devMenu = {
-        setLevel: (newLevel) => {
-            level = Math.max(1, Math.min(100, newLevel));
-            console.log(`Level set to ${level}`);
-        },
-        setHealth: (newHealth) => {
-            player.health = Math.max(1, Math.min(100, newHealth));
-            console.log(`Player health set to ${player.health}`);
-        },
-        setGun: (gunType) => {
-            if (GUNS[gunType]) {
-                player.currentGun = gunType;
-                player.gunDuration = Infinity;
-                console.log(`Gun set to ${gunType}`);
-            } else {
-                console.log(`Invalid gun type. Available types: ${Object.keys(GUNS).join(', ')}`);
-            }
-        },
-        addScore: (amount) => {
-            player.score += amount;
-            console.log(`Added ${amount} to score. New score: ${player.score}`);
-        },
-        spawnEnemy: (type) => {
-            if (ENEMY_TYPES[type]) {
-                const enemy = { ...ENEMY_TYPES[type] };
-                enemy.x = canvas.width;
-                enemy.y = Math.random() * (canvas.height - enemy.size);
-                enemy.w = enemy.size;
-                enemy.h = enemy.size * 0.6;
-                enemy.type = type;
-                enemies.push(enemy);
-                console.log(`Spawned ${type} enemy`);
-            } else {
-                console.log(`Invalid enemy type. Available types: ${Object.keys(ENEMY_TYPES).join(', ')}`);
-            }
-        },
-        clearEnemies: () => {
-            enemies = [];
-            console.log("All enemies cleared");
-        },
-        toggleInvincibility: () => {
-            player.invincible = !player.invincible;
-            console.log(`Invincibility ${player.invincible ? 'enabled' : 'disabled'}`);
-        },
-        toggleDebugOverlay: toggleDebugOverlay
-    };
-    
-    function initializeGame() {
-        canvas = document.getElementById('gameCanvas');
-        if (!canvas) {
-            console.error('Canvas element not found');
-            return;
+
+const devMenu = {
+    setLevel: (newLevel) => {
+        level = Math.max(1, Math.min(100, newLevel));
+        console.log(`Level set to ${level}`);
+    },
+    setHealth: (newHealth) => {
+        player.health = Math.max(1, Math.min(100, newHealth));
+        console.log(`Player health set to ${player.health}`);
+    },
+    setGun: (gunType) => {
+        if (GUNS[gunType]) {
+            player.currentGun = gunType;
+            player.gunDuration = Infinity;
+            console.log(`Gun set to ${gunType}`);
+        } else {
+            console.log(`Invalid gun type. Available types: ${Object.keys(GUNS).join(', ')}`);
         }
-        ctx = canvas.getContext('2d');
-    
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    
-        canvas.removeEventListener('touchstart', handleTouch);
-        canvas.removeEventListener('touchmove', handleTouchMove);
-        canvas.removeEventListener('touchend', handleTouchEnd);
-        canvas.removeEventListener('touchcancel', handleTouchEnd);
-    
-        canvas.addEventListener('touchstart', handleTouch, { passive: false });
-        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-        canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-    
-        canvas.addEventListener('click', handleDevMenuInteraction);
-    
-        // Modify the keydown event listener in the initializeGame function
-        window.addEventListener('keydown', (e) => {
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
-                e.preventDefault();
-                keys[e.code] = true;
-                isUsingKeyboard = true;
-            }
-        
-            if (e.code === 'F4') {
-                e.preventDefault();
-                toggleDebugOverlay();
-            } else if (e.code === 'KeyP') {
-                e.preventDefault();
-                if (devMenuUnlocked) {
-                    toggleDevMenu();
-                } else {
-                    console.log("Dev menu is locked. Use unlockDevMenu() to unlock it.");
-                }
-            }
-        });
-    
-        window.addEventListener('keyup', handleKeyUp);
-    
-        playerImage.onerror = () => console.error("Failed to load player image");
-        enemyImage.onerror = () => console.error("Failed to load enemy image");
-        explosionImage.onerror = () => console.error("Failed to load explosion image");
-    
-        window.devMenu = devMenu;
-        window.unlockDevMenu = unlockDevMenu;
-    
-        initGame();
+    },
+    addScore: (amount) => {
+        player.score += amount;
+        console.log(`Added ${amount} to score. New score: ${player.score}`);
+    },
+    spawnEnemy: (type) => {
+        if (ENEMY_TYPES[type]) {
+            const enemy = { ...ENEMY_TYPES[type] };
+            enemy.x = canvas.width;
+            enemy.y = Math.random() * (canvas.height - enemy.size);
+            enemy.w = enemy.size;
+            enemy.h = enemy.size * 0.6;
+            enemy.type = type;
+            enemies.push(enemy);
+            console.log(`Spawned ${type} enemy`);
+        } else {
+            console.log(`Invalid enemy type. Available types: ${Object.keys(ENEMY_TYPES).join(', ')}`);
+        }
+    },
+    clearEnemies: () => {
+        enemies = [];
+        console.log("All enemies cleared");
+    },
+    toggleInvincibility: () => {
+        player.invincible = !player.invincible;
+        console.log(`Invincibility ${player.invincible ? 'enabled' : 'disabled'}`);
+    },
+    toggleDebugOverlay: toggleDebugOverlay
+};
+
+function initializeGame() {
+    canvas = document.getElementById('gameCanvas');
+    if (!canvas) {
+        console.error('Canvas element not found');
+        return;
     }
+    ctx = canvas.getContext('2d');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    canvas.removeEventListener('touchstart', handleTouch);
+    canvas.removeEventListener('touchmove', handleTouchMove);
+    canvas.removeEventListener('touchend', handleTouchEnd);
+    canvas.removeEventListener('touchcancel', handleTouchEnd);
+
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+    canvas.addEventListener('click', handleDevMenuInteraction);
+
+    window.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+            e.preventDefault();
+            keys[e.code] = true;
+            isUsingKeyboard = true;
+        }
     
-    // Add an event listener for DOMContentLoaded
-    document.addEventListener('DOMContentLoaded', initializeGame);
+        if (e.code === 'F4') {
+            e.preventDefault();
+            toggleDebugOverlay();
+        } else if (e.code === 'KeyP') {
+            e.preventDefault();
+            if (devMenuUnlocked) {
+                toggleDevMenu();
+            } else {
+                console.log("Dev menu is locked. Use unlockDevMenu() to unlock it.");
+            }
+        }
+    });
+
+    window.addEventListener('keyup', handleKeyUp);
+
+    playerImage.onerror = () => console.error("Failed to load player image");
+    enemyImage.onerror = () => console.error("Failed to load enemy image");
+    explosionImage.onerror = () => console.error("Failed to load explosion image");
+
+    window.devMenu = devMenu;
+    window.unlockDevMenu = unlockDevMenu;
+
+    initGame();
+}
+
+// Add an event listener for DOMContentLoaded
+document.addEventListener('DOMContentLoaded', initializeGame);
