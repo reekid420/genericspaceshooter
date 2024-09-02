@@ -1,10 +1,10 @@
 // Global declarations
-let canvas, ctx;
 let bullets = [], enemies = [], powerUps = [], stars = [], explosions = [];
 let gameOver = false, level = 1;
+let player;
+let canvas, ctx;
 const keys = {};
 let activeTouches = {};
-let showDebugOverlay = false;
 let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
@@ -15,6 +15,11 @@ let lastKeyboardY = 0;
 let lastKeyboardSpeed = 5;
 let boss = null;
 let bossPhase = 0;
+let rapidShotCount = 0;
+let lastShotTime = 0;
+let devMenuButton = null;
+let touchControls = {};
+let activeSlider = null;
 
 // Constants
 const COLORS = {
@@ -49,22 +54,25 @@ enemyImage.src = '../images/basic&bigboss.png';
 
 const explosionImage = new Image();
 explosionImage.src = '../images/explosion.png';
+
 const finalBossImage = new Image();
 finalBossImage.src = '../images/final-boss.png';
 
-// Player object
-let player;
-
-// Touch controls
-let touchControls = {};
-let activeSlider = null;
+const blueShipImage = new Image();
+blueShipImage.src = '../images/blue_ship.png';
 
 function initGame() {
     window.removeEventListener('keydown', handleRestart);
-    canvas.removeEventListener('touchstart', handleRestart);
-    console.log("Game initialized");
-    
     canvas = document.getElementById('gameCanvas');
+    if (canvas) {
+        canvas.removeEventListener('touchstart', handleRestart);
+    }
+    
+    if (!canvas) {
+        console.error('Canvas element not found');
+        return;
+    }
+    
     ctx = canvas.getContext('2d');
     
     canvas.width = window.innerWidth;
@@ -81,26 +89,31 @@ function initGame() {
 
     bullets = []; enemies = []; powerUps = []; stars = []; explosions = [];
     gameOver = false; level = 1;
-    showDebugOverlay = false;
     showDevMenu = false;
     boss = null;
     bossPhase = 0;
 
+    // Set up touch event listeners
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
     resizeCanvas();
     createStars();
-    console.log('Starting game loop');
-    gameLoop();
+    requestAnimationFrame(gameLoop);
 }
 
 function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    updateTouchControls();
-    console.log('Resized canvas dimensions:', canvas.width, canvas.height);
+    if (canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        updateTouchControls();
+    }
 }
 
-
 function createStars() {
+    stars = [];
     for (let i = 0; i < 200; i++) {
         stars.push({
             x: Math.random() * canvas.width,
@@ -128,6 +141,9 @@ function drawStarryBackground() {
 }
 
 function updateTouchControls() {
+    const canvas = document.getElementById('gameCanvas');
+    if (!canvas) return;
+    
     const buttonSize = Math.min(80, canvas.width / 8);
     const gap = 5;
     const sliderHeight = canvas.height * 0.6;
@@ -136,7 +152,7 @@ function updateTouchControls() {
     touchControls = {
         moveSlider: { x: 20, y: (canvas.height - sliderHeight) / 2, w: sliderWidth, h: sliderHeight, value: 0.5 },
         speedSlider: { x: canvas.width - sliderWidth - 20, y: (canvas.height - sliderHeight) / 2, w: sliderWidth, h: sliderHeight, value: 0.5 },
-        shoot: { x: canvas.width - buttonSize * 2 - gap, y: canvas.height - buttonSize - gap, w: buttonSize, h: buttonSize }
+        shoot: { x: canvas.width - buttonSize - gap - 60, y: canvas.height - buttonSize - gap, w: buttonSize, h: buttonSize }
     };
 }
 
@@ -173,7 +189,10 @@ function handleTouch(e) {
     
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
-        handleSingleTouch(touch);
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        handleSingleTouch(x, y, touch.identifier);
     }
 }
 
@@ -184,36 +203,50 @@ function handleTouchMove(e) {
     
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
-        handleSingleTouch(touch);
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        handleSingleTouch(x, y, touch.identifier);
     }
 }
 
 function handleTouchEnd(e) {
     e.preventDefault();
-    const touches = e.touches;
-    if (touches.length === 0) {
+    const touches = e.changedTouches;
+    for (let i = 0; i < touches.length; i++) {
+        const touch = touches[i];
+        if (activeTouches[touch.identifier]) {
+            delete activeTouches[touch.identifier];
+        }
+    }
+    if (Object.keys(activeTouches).length === 0) {
         activeSlider = null;
         keys.shoot = false;
     }
 }
 
-function handleSingleTouch(touch) {
-    const x = touch.clientX;
-    const y = touch.clientY;
+function handleSingleTouch(x, y, identifier) {
+    let touchHandled = false;
     
     for (const control of ['moveSlider', 'speedSlider']) {
         const slider = touchControls[control];
         if (x >= slider.x - slider.w && x <= slider.x + slider.w * 2 && y >= slider.y && y <= slider.y + slider.h) {
             slider.value = 1 - Math.max(0, Math.min(1, (y - slider.y) / slider.h));
             activeSlider = control;
-            return; // Exit the function if we've handled a slider
+            touchHandled = true;
+            activeTouches[identifier] = { control: control, x: x, y: y };
+            break;
         }
     }
     
-    if (checkCollision({x: x, y: y, w: 1, h: 1}, touchControls.shoot)) {
+    if (!touchHandled && checkCollision({x: x, y: y, w: 1, h: 1}, touchControls.shoot)) {
         keys.shoot = true;
-    } else {
-        activeSlider = null; // Reset active slider if touch is outside any control
+        touchHandled = true;
+        activeTouches[identifier] = { control: 'shoot', x: x, y: y };
+    }
+    
+    if (!touchHandled) {
+        activeSlider = null;
     }
 }
 
@@ -251,6 +284,9 @@ function updatePlayerPosition() {
 
     // Shooting
     if (keys.Space || keys.shoot) shoot();
+
+    // Check for dev menu unlock
+    checkDevMenuUnlock();
 }
 
 function resetControls() {
@@ -309,7 +345,11 @@ function drawDetailedShip(x, y, w, h, color, isPlayer, type) {
 }
 
 function drawEnemy(e) {
-    drawDetailedShip(e.x, e.y, e.w, e.h, e.color, false, e.type);
+    if (e.type === 'tank' && blueShipImage.complete) {
+        ctx.drawImage(blueShipImage, e.x, e.y, e.w, e.h);
+    } else {
+        drawDetailedShip(e.x, e.y, e.w, e.h, e.color, false, e.type);
+    }
     
     if (e.type === 'miniBoss' || e.type === 'bigBoss') {
         const healthPercentage = e.health / e.maxHealth;
@@ -434,17 +474,19 @@ function drawDebugOverlay() {
 }
 
 function drawDevMenu() {
-    const menuStartX = 10;
-    const menuStartY = 40;
-    const menuItemHeight = 30;
-    const menuWidth = 300;
+    const menuWidth = Math.min(300, canvas.width * 0.8);
+    const menuItemHeight = 40;
     const menuItemCount = 8;
+    const menuHeight = (menuItemCount + 1) * menuItemHeight;
+    
+    const menuStartX = (canvas.width - menuWidth) / 2;
+    const menuStartY = (canvas.height - menuHeight) / 2;
 
     ctx.fillStyle = COLORS.devMenu;
-    ctx.fillRect(menuStartX, menuStartY, menuWidth, (menuItemCount + 1) * menuItemHeight);
+    ctx.fillRect(menuStartX, menuStartY, menuWidth, menuHeight);
     ctx.fillStyle = 'white';
     ctx.font = '16px Arial';
-    ctx.fillText('Dev Menu', menuStartX + 10, menuStartY + 20);
+    ctx.fillText('Dev Menu', menuStartX + 10, menuStartY + 25);
 
     const menuItems = [
         'Set Level', 'Set Health', 'Set Gun', 'Add Score',
@@ -452,8 +494,55 @@ function drawDevMenu() {
     ];
 
     menuItems.forEach((item, index) => {
-        ctx.fillText(item, menuStartX + 10, menuStartY + (index + 2) * menuItemHeight);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(menuStartX, menuStartY + (index + 1) * menuItemHeight, menuWidth, menuItemHeight);
+        ctx.fillStyle = 'white';
+        ctx.fillText(item, menuStartX + 10, menuStartY + (index + 2) * menuItemHeight - 10);
     });
+}
+
+function checkDevMenuUnlock() {
+    const now = Date.now();
+    if (player.y <= player.h && player.speed >= 1 && player.speed <= 2) {
+        if (now - lastShotTime <= 2000) {
+            rapidShotCount++;
+            if (rapidShotCount >= 15) {
+                unlockDevMenu();
+            }
+        } else {
+            rapidShotCount = 1;
+        }
+        lastShotTime = now;
+    } else {
+        rapidShotCount = 0;
+    }
+}
+
+function unlockDevMenu() {
+    if (!devMenuUnlocked) {
+        devMenuUnlocked = true;
+        console.log("Dev menu unlocked. Press 'P' to toggle.");
+        createDevMenuButton();
+    }
+}
+
+function createDevMenuButton() {
+    if (!devMenuButton) {
+        devMenuButton = document.createElement('button');
+        devMenuButton.textContent = 'Dev Menu';
+        devMenuButton.style.position = 'fixed';
+        devMenuButton.style.bottom = '10px';
+        devMenuButton.style.left = '10px';
+        devMenuButton.style.zIndex = '1000';
+        devMenuButton.addEventListener('click', toggleDevMenu);
+        document.body.appendChild(devMenuButton);
+    }
+}
+
+function toggleDevMenu() {
+    if (devMenuUnlocked) {
+        showDevMenu = !showDevMenu;
+    }
 }
 
 function toggleDebugOverlay() {
@@ -553,6 +642,7 @@ function checkBulletEnemyCollisions() {
         return !bulletHit;
     });
 }
+
 function checkPlayerEnemyCollisions() {
     if (!player.invincible && player.damageInvulnerable === 0) {
         enemies.forEach(e => {
@@ -658,18 +748,29 @@ function trySpawnPowerUp() {
 function handleDevMenuInteraction(e) {
     if (!devMenuUnlocked || !showDevMenu) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    let x, y;
+    if (e.type === 'touchstart') {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        x = touch.clientX - rect.left;
+        y = touch.clientY - rect.top;
+    } else {
+        const rect = canvas.getBoundingClientRect();
+        x = e.clientX - rect.left;
+        y = e.clientY - rect.top;
+    }
 
-    const menuStartX = 10;
-    const menuStartY = 40;
-    const menuItemHeight = 30;
-    const menuWidth = 300;
+    const menuWidth = Math.min(300, canvas.width * 0.8);
+    const menuItemHeight = 40;
     const menuItemCount = 8;
+    const menuHeight = (menuItemCount + 1) * menuItemHeight;
+    
+    const menuStartX = (canvas.width - menuWidth) / 2;
+    const menuStartY = (canvas.height - menuHeight) / 2;
 
     if (x >= menuStartX && x <= menuStartX + menuWidth &&
-        y >= menuStartY + menuItemHeight && y <= menuStartY + (menuItemCount + 1) * menuItemHeight) {
+        y >= menuStartY + menuItemHeight && y <= menuStartY + menuHeight) {
         
         const optionIndex = Math.floor((y - (menuStartY + menuItemHeight)) / menuItemHeight);
         
@@ -707,17 +808,15 @@ function handleDevMenuInteraction(e) {
     }
 }
 
-function unlockDevMenu() {
-    devMenuUnlocked = true;
-    console.log("Dev menu unlocked. You can now toggle it with P.");
-}
 
-function toggleDevMenu() {
-    if (devMenuUnlocked) {
-        showDevMenu = !showDevMenu;
-        console.log(`Dev menu ${showDevMenu ? 'opened' : 'closed'}`);
-    } else {
-        console.log("Dev menu is locked. Use unlockDevMenu() to unlock it.");
+
+
+
+
+function addDebugMessage(message) {
+    debugMessages.push(message);
+    if (debugMessages.length > 10) {
+        debugMessages.shift();
     }
 }
 
@@ -765,7 +864,7 @@ function updateAndDrawBoss() {
     const now = Date.now();
     if (now - boss.lastShot > 1000) { // Shoot every second
         boss.lastShot = now;
-        bossShoot(); // Fixed typo here
+        bossShoot();
     }
 }
 
@@ -877,12 +976,8 @@ function gameLoop(currentTime) {
         updateGunDuration();
         drawHUD();
         checkLevelUp();
-
         trySpawnPowerUp();
 
-        if (showDebugOverlay) {
-            drawDebugOverlay();
-        }
         if (devMenuUnlocked && showDevMenu) {
             drawDevMenu();
         }
@@ -908,6 +1003,16 @@ function handleRestart(e) {
         level = boss ? 1 : level; // Reset to level 1 if boss was defeated
         boss = null;
         bossPhase = 0;
+    }
+}
+
+function handleKeyDown(e) {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+        keys[e.code] = true;
+        isUsingKeyboard = true;
+    }
+    if (e.code === 'KeyP') {
+        toggleDevMenu();
     }
 }
 
@@ -964,6 +1069,9 @@ const devMenu = {
     toggleDebugOverlay: toggleDebugOverlay
 };
 
+
+
+
 function initializeGame() {
     canvas = document.getElementById('gameCanvas');
     if (!canvas) {
@@ -975,49 +1083,31 @@ function initializeGame() {
     // Set initial canvas size
     resizeCanvas();
 
-    // Add event listener for window resize
+    // Add event listener for window resize and orientation change
     window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', resizeCanvas);
 
+    // Remove existing listeners to prevent duplicates
     canvas.removeEventListener('touchstart', handleTouch);
     canvas.removeEventListener('touchmove', handleTouchMove);
     canvas.removeEventListener('touchend', handleTouchEnd);
     canvas.removeEventListener('touchcancel', handleTouchEnd);
+    canvas.removeEventListener('click', handleDevMenuInteraction);
+    canvas.removeEventListener('touchstart', handleDevMenuInteraction);
 
+    // Add touch event listeners
     canvas.addEventListener('touchstart', handleTouch, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
     canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
+    // Add dev menu interaction listeners
     canvas.addEventListener('click', handleDevMenuInteraction);
+    canvas.addEventListener('touchstart', handleDevMenuInteraction, { passive: false });
 
-    window.addEventListener('keydown', (e) => {
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
-            e.preventDefault();
-            keys[e.code] = true;
-            isUsingKeyboard = true;
-        }
-    
-        if (e.code === 'F4') {
-            e.preventDefault();
-            toggleDebugOverlay();
-        } else if (e.code === 'KeyP') {
-            e.preventDefault();
-            if (devMenuUnlocked) {
-                toggleDevMenu();
-            } else {
-                console.log("Dev menu is locked. Use unlockDevMenu() to unlock it.");
-            }
-        }
-    });
-
+    // Add keyboard event listeners
+    window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
-    playerImage.onerror = () => console.error("Failed to load player image");
-    enemyImage.onerror = () => console.error("Failed to load enemy image");
-    explosionImage.onerror = () => console.error("Failed to load explosion image");
-
-    window.devMenu = devMenu;
-    window.unlockDevMenu = unlockDevMenu;
 
     initGame();
 }

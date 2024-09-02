@@ -1,0 +1,84 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    font-family: Arial, sans-serif;
+}
+
+#gameCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    z-index: 1;
+}
+
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.social-links {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.social-link {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    text-decoration: none;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 5px 10px;
+    border-radius: 5px;
+    pointer-events: auto;
+}
+
+.social-link img {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+}
+
+.game-logo {
+    max-width: 200px;
+    margin-bottom: 10px;
+}
+
+h1 {
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    margin: 0;
+}
+
+@media screen and (orientation: landscape) {
+    #gameCanvas {
+        width: 100vw;
+        height: 100vh;
+    }
+}
