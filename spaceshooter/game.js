@@ -33,7 +33,7 @@ const GUNS = {
     default: { cooldown: 200, bulletSpeed: 8, bulletSize: 4, color: COLORS.guns.default },
     spread: { cooldown: 650, bulletSpeed: 6, bulletSize: 4, color: COLORS.guns.spread },
     rapid: { cooldown: 50, bulletSpeed: 10, bulletSize: 4, color: COLORS.guns.rapid },
-    burst: { cooldown: 500, bulletSpeed: 9, bulletSize: 4, color: '#FFA500', burstCount: 3, burstDelay: 50 }
+    burst: { cooldown: 400, bulletSpeed: 9, bulletSize: 4, color: '#FFA500', burstCount: 3, burstDelay: 50 }
 };
 
 const ENEMY_TYPES = {
@@ -42,7 +42,8 @@ const ENEMY_TYPES = {
     tank: { health: 3, speed: 1, size: 40, color: '#00FFFF', score: 30 },
     miniBoss: { health: 20, speed: 0.5, size: 60, color: '#FFA500', score: 100 },
     bigBoss: { health: 100, speed: 0.2, size: 100, color: '#FF0000', score: 500 },
-    finalBoss: { health: 1000, speed: 2, size: 150, color: '#FF1493', score: 10000 }
+    finalBoss: { health: 1000, speed: 2, size: 150, color: '#FF1493', score: 100000 },
+    special: { health: 200, speed: 1, size: 50, color: '#800080', score: 1000 }
 };
 
 // Image loading
@@ -60,6 +61,15 @@ finalBossImage.src = '../images/final-boss.png';
 
 const blueShipImage = new Image();
 blueShipImage.src = '../images/blue_ship.png';
+
+const specialEnemyImage = new Image();
+specialEnemyImage.src = '../images/nokotan.png';
+
+const congratsImage = new Image();
+congratsImage.src = '../images/diegos-waifu.jpg';
+
+const freakyShipImage = new Image();
+freakyShipImage.src = '../images/freaky_ship.png';
 
 function initGame() {
     window.removeEventListener('keydown', handleRestart);
@@ -345,13 +355,17 @@ function drawDetailedShip(x, y, w, h, color, isPlayer, type) {
 }
 
 function drawEnemy(e) {
-    if (e.type === 'tank' && blueShipImage.complete) {
+    if (e.type === 'special' && specialEnemyImage.complete) {
+        ctx.drawImage(specialEnemyImage, e.x, e.y, e.w, e.h);
+    } else if (e.type === 'tank' && blueShipImage.complete) {
         ctx.drawImage(blueShipImage, e.x, e.y, e.w, e.h);
+    } else if (e.type === 'fast' && freakyShipImage.complete) {
+        ctx.drawImage(freakyShipImage, e.x, e.y, e.w, e.h);
     } else {
         drawDetailedShip(e.x, e.y, e.w, e.h, e.color, false, e.type);
     }
     
-    if (e.type === 'miniBoss' || e.type === 'bigBoss') {
+    if (e.type === 'miniBoss' || e.type === 'bigBoss' || e.type === 'special') {
         const healthPercentage = e.health / e.maxHealth;
         ctx.fillStyle = 'red';
         ctx.fillRect(e.x, e.y - 10, e.w, 5);
@@ -362,7 +376,9 @@ function drawEnemy(e) {
 
 function spawnEnemy() {
     let type;
-    if (level % 50 === 0 && !enemies.some(e => e.type === 'bigBoss')) {
+    if (Math.random() < 0.001) { // 1 in 1000 chance
+        type = 'special';
+    } else if (level % 50 === 0 && !enemies.some(e => e.type === 'bigBoss')) {
         type = 'bigBoss';
     } else if (level % 10 === 0 && !enemies.some(e => e.type === 'miniBoss')) {
         type = 'miniBoss';
@@ -388,6 +404,7 @@ function spawnEnemy() {
         score: enemyType.score
     });
 }
+
 
 function spawnPowerUp() {
     const type = Math.random() < 0.6 ? 'gun' : (Math.random() < 0.5 ? 'health' : 'score');
@@ -647,9 +664,14 @@ function checkPlayerEnemyCollisions() {
     if (!player.invincible && player.damageInvulnerable === 0) {
         enemies.forEach(e => {
             if (checkCollision(player, e)) {
-                player.health -= 10;
-                player.damageInvulnerable = 60;
-                if (player.health <= 0) gameOver = true;
+                if (e.type === 'special') {
+                    player.health = 0;
+                    gameOver = true;
+                } else {
+                    player.health -= 10;
+                    player.damageInvulnerable = 60;
+                    if (player.health <= 0) gameOver = true;
+                }
             }
         });
     } else if (player.damageInvulnerable > 0) {
@@ -921,14 +943,36 @@ function showCongratulationsScreen() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
+    // Draw the congratulatory image
+    if (congratsImage.complete) {
+        const imageWidth = 200;
+        const imageHeight = 200;
+        const imageX = canvas.width / 2 - imageWidth / 2;
+        const imageY = canvas.height / 4 - imageHeight / 2;
+        ctx.drawImage(congratsImage, imageX, imageY, imageWidth, imageHeight);
+    } else {
+        // Fallback if image hasn't loaded
+        ctx.fillStyle = '#888888';
+        ctx.fillRect(canvas.width / 2 - 100, canvas.height / 4 - 100, 200, 200);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Congratulatory Image', canvas.width / 2, canvas.height / 4 + 120);
+    }
+
     ctx.fillStyle = 'white';
     ctx.font = 'bold 48px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Congratulations!', canvas.width / 2, canvas.height / 2 - 50);
+    ctx.fillText('Congratulations!', canvas.width / 2, canvas.height / 2 + 50);
     ctx.font = '24px Arial';
-    ctx.fillText(`You beat the game! Final Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 10);
+    ctx.fillText(`You beat the game! Final Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 100);
+    
+    // Add a fun message about the reward
+    ctx.font = '20px Arial';
+    ctx.fillText('congratulations you win miku but only if your diego rodriguez aka spydudereek if your not then you get a freakyship', canvas.width / 2, canvas.height / 2 + 150);
+
     ctx.font = '18px Arial';
-    ctx.fillText('Press SPACE to start a new game+', canvas.width / 2, canvas.height / 2 + 50);
+    ctx.fillText('Press SPACE to start a new game+', canvas.width / 2, canvas.height - 50);
 
     gameOver = true;
 }
