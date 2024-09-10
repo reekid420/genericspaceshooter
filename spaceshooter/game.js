@@ -1,3 +1,5 @@
+//charlie aka reekid96 was here :3
+
 // Global declarations
 let bullets = [], enemies = [], powerUps = [], stars = [], explosions = [];
 let gameOver = false, level = 1;
@@ -20,6 +22,9 @@ let lastShotTime = 0;
 let devMenuButton = null;
 let touchControls = {};
 let activeSlider = null;
+let cumulativeScore = 0;
+let isNewGamePlus = false;
+let bulletDamage = 1;
 
 // Constants
 const COLORS = {
@@ -48,28 +53,28 @@ const ENEMY_TYPES = {
 
 // Image loading
 const playerImage = new Image();
-playerImage.src = '../images/player.png';
+playerImage.src = '../images/player.jpg';
 
 const enemyImage = new Image();
-enemyImage.src = '../images/basic&bigboss.png';
+enemyImage.src = '../images/basic&bigboss.jpg';
 
 const explosionImage = new Image();
-explosionImage.src = '../images/explosion.png';
+explosionImage.src = '../images/explosion.jpg';
 
 const finalBossImage = new Image();
-finalBossImage.src = '../images/final-boss.png';
+finalBossImage.src = '../images/final-boss.jpg';
 
 const blueShipImage = new Image();
-blueShipImage.src = '../images/blue_ship.png';
+blueShipImage.src = '../images/blue_ship.jpg';
 
 const specialEnemyImage = new Image();
-specialEnemyImage.src = '../images/nokotan.png';
+specialEnemyImage.src = '../images/nokotan.jpg';
 
 const congratsImage = new Image();
 congratsImage.src = '../images/diegos-waifu.jpg';
 
 const freakyShipImage = new Image();
-freakyShipImage.src = '../images/freaky_ship.png';
+freakyShipImage.src = '../images/freaky_ship.jpg';
 
 function initGame() {
     window.removeEventListener('keydown', handleRestart);
@@ -88,20 +93,28 @@ function initGame() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     
+    if (isNewGamePlus) {
+        cumulativeScore += player.score; // Add the previous game's score to the cumulative score
+    } else {
+        cumulativeScore = 0; // Reset cumulative score for a fresh start
+    }
+    
     player = {
         x: 50, y: canvas.height / 2, w: 50, h: 30, baseSpeed: 5, speed: 5,
         minSpeed: 1, maxSpeed: 20,
         damageInvulnerable: 0,
         health: 100, score: 0, lastShot: 0, invulnerable: 0,
         currentGun: 'default', gunDuration: 0,
-        invincible: false
+        invincible: false,
     };
 
     bullets = []; enemies = []; powerUps = []; stars = []; explosions = [];
-    gameOver = false; level = 1;
+    gameOver = false; 
+    level = 1; // Always reset level to 1
     showDevMenu = false;
     boss = null;
     bossPhase = 0;
+    bulletDamage = 1;
 
     // Set up touch event listeners
     canvas.addEventListener('touchstart', handleTouch, { passive: false });
@@ -111,6 +124,7 @@ function initGame() {
 
     resizeCanvas();
     createStars();
+
     requestAnimationFrame(gameLoop);
 }
 
@@ -493,7 +507,7 @@ function drawDebugOverlay() {
 function drawDevMenu() {
     const menuWidth = Math.min(300, canvas.width * 0.8);
     const menuItemHeight = 40;
-    const menuItemCount = 8;
+    const menuItemCount = 8; 
     const menuHeight = (menuItemCount + 1) * menuItemHeight;
     
     const menuStartX = (canvas.width - menuWidth) / 2;
@@ -506,8 +520,8 @@ function drawDevMenu() {
     ctx.fillText('Dev Menu', menuStartX + 10, menuStartY + 25);
 
     const menuItems = [
-        'Set Level', 'Set Health', 'Set Gun', 'Add Score',
-        'Spawn Enemy', 'Clear Enemies', 'Toggle Invincibility', 'Toggle Debug Overlay'
+        'Set Level', 'Set Health', 'Set Gun', 'Set Score',
+        'Set Cumulative Score', 'Spawn Enemy', 'Clear Enemies', 'Set Bullet Damage'
     ];
 
     menuItems.forEach((item, index) => {
@@ -517,6 +531,7 @@ function drawDevMenu() {
         ctx.fillText(item, menuStartX + 10, menuStartY + (index + 2) * menuItemHeight - 10);
     });
 }
+
 
 function checkDevMenuUnlock() {
     const now = Date.now();
@@ -624,7 +639,7 @@ function checkBulletEnemyCollisions() {
         // Check collision with regular enemies
         enemies = enemies.filter(e => {
             if (!bulletHit && checkCollision({x: b.x - b.size, y: b.y - b.size, w: b.size * 2, h: b.size * 2}, e)) {
-                e.health--;
+                e.health -= bulletDamage;
                 if (e.health <= 0) {
                     player.score += e.score;
                     explosions.push({
@@ -642,7 +657,7 @@ function checkBulletEnemyCollisions() {
 
         // Check collision with final boss
         if (!bulletHit && boss && checkCollision({x: b.x - b.size, y: b.y - b.size, w: b.size * 2, h: b.size * 2}, boss)) {
-            boss.health--;
+            boss.health -= bulletDamage;
             if (boss.health <= 0) {
                 player.score += ENEMY_TYPES.finalBoss.score;
                 explosions.push({
@@ -713,10 +728,12 @@ function drawHUD() {
     const yPosition = 30;
     
     if (isMobile) {
-        ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Level: ${level}`, 10, yPosition);
-        ctx.fillText(`Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun} | Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, yPosition + 30);
+        ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Total: ${cumulativeScore + player.score}`, 10, yPosition);
+        ctx.fillText(`Level: ${level} | Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun}`, 10, yPosition + 30);
+        ctx.fillText(`Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, yPosition + 60);
     } else {
-        ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Level: ${level} | Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun} | Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, yPosition);
+        ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Total: ${cumulativeScore + player.score} | Level: ${level}`, 10, yPosition);
+        ctx.fillText(`Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun} | Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, yPosition + 30);
     }
 }
 
@@ -731,9 +748,12 @@ function drawGameOver() {
     
     ctx.font = '24px Arial';
     ctx.fillText(`Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 10);
+    ctx.fillText(`Total Score: ${cumulativeScore + player.score}`, canvas.width / 2, canvas.height / 2 + 40);
     
     ctx.font = '18px Arial';
-    ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
+    ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 80);
+
+    // We'll handle score submission in the handleRestart function
 }
 
 function checkLevelUp() {
@@ -810,30 +830,27 @@ function handleDevMenuInteraction(e) {
                 if (newGun) devMenu.setGun(newGun);
                 break;
             case 3:
-                const scoreToAdd = prompt("Enter score to add:", 0);
-                if (scoreToAdd) devMenu.addScore(parseInt(scoreToAdd));
+                const newScore = prompt("Enter new score:", player.score);
+                if (newScore) devMenu.setScore(parseInt(newScore));
                 break;
             case 4:
+                const newCumulativeScore = prompt("Enter new cumulative score:", cumulativeScore);
+                if (newCumulativeScore) devMenu.setCumulativeScore(parseInt(newCumulativeScore));
+                break;
+            case 5:
                 const enemyType = prompt("Enter enemy type to spawn:", "basic");
                 if (enemyType) devMenu.spawnEnemy(enemyType);
                 break;
-            case 5:
+            case 6:
                 devMenu.clearEnemies();
                 break;
-            case 6:
-                devMenu.toggleInvincibility();
-                break;
             case 7:
-                devMenu.toggleDebugOverlay();
+                const newBulletDamage = prompt("Enter new bullet damage:", bulletDamage);
+                if (newBulletDamage) devMenu.setBulletDamage(parseInt(newBulletDamage));
                 break;
         }
     }
 }
-
-
-
-
-
 
 function addDebugMessage(message) {
     debugMessages.push(message);
@@ -965,16 +982,21 @@ function showCongratulationsScreen() {
     ctx.textAlign = 'center';
     ctx.fillText('Congratulations!', canvas.width / 2, canvas.height / 2 + 50);
     ctx.font = '24px Arial';
-    ctx.fillText(`You beat the game! Final Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 100);
+    ctx.fillText(`You beat the game!`, canvas.width / 2, canvas.height / 2 + 100);
+    ctx.fillText(`Final Score: ${player.score}`, canvas.width / 2, canvas.height / 2 + 130);
+    ctx.fillText(`Total Score: ${cumulativeScore + player.score}`, canvas.width / 2, canvas.height / 2 + 160);
     
     // Add a fun message about the reward
     ctx.font = '20px Arial';
-    ctx.fillText('congratulations you win miku but only if your diego rodriguez aka spydudereek if your not then you get a freakyship', canvas.width / 2, canvas.height / 2 + 150);
+    ctx.fillText('congratulations you win miku but only if your diego rodriguez aka spydudereek if your not then you get a freakyship', canvas.width / 2, canvas.height / 2 + 200);
 
     ctx.font = '18px Arial';
     ctx.fillText('Press SPACE to start a new game+', canvas.width / 2, canvas.height - 50);
 
     gameOver = true;
+    isNewGamePlus = true;  // Set this flag for the next game
+    
+    // We'll handle score submission in the handleRestart function
 }
 
 function gameLoop(currentTime) {
@@ -1033,6 +1055,12 @@ function gameLoop(currentTime) {
         } else {
             drawGameOver();
         }
+        
+         // Remove any existing event listeners to prevent duplicates
+         window.removeEventListener('keydown', handleRestart);
+         canvas.removeEventListener('touchstart', handleRestart);
+         
+        // Add event listeners for restart
         window.addEventListener('keydown', handleRestart);
         canvas.addEventListener('touchstart', handleRestart);
     }
@@ -1041,15 +1069,19 @@ function gameLoop(currentTime) {
 function handleRestart(e) {
     if (e.code === 'Space' || e.type === 'touchstart') {
         e.preventDefault();
-        const currentScore = player.score;
+        
+        // Submit the score before starting a new game
+        const totalScore = cumulativeScore + player.score;
+        promptForName(totalScore);
+        
+        // Remove the event listeners
+        window.removeEventListener('keydown', handleRestart);
+        canvas.removeEventListener('touchstart', handleRestart);
+        
         initGame();
-        player.score = currentScore;
-        level = boss ? 1 : level; // Reset to level 1 if boss was defeated
-        boss = null;
-        bossPhase = 0;
+        displayLeaderboard(); // Update leaderboard display
     }
 }
-
 function handleKeyDown(e) {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
         keys[e.code] = true;
@@ -1084,9 +1116,32 @@ const devMenu = {
             console.log(`Invalid gun type. Available types: ${Object.keys(GUNS).join(', ')}`);
         }
     },
-    addScore: (amount) => {
-        player.score += amount;
-        console.log(`Added ${amount} to score. New score: ${player.score}`);
+    setBulletDamage: (newDamage) => {
+        if (newDamage > 0) {
+            bulletDamage = newDamage;
+            console.log(`Bullet damage set to ${bulletDamage}`);
+        } else {
+            console.log("Invalid damage. Please enter a positive number.");
+        }
+    },
+    setScore: (newScore) => {
+        if (newScore >= 0) {
+            player.score = newScore;
+            console.log(`Score set to ${player.score}`);
+            console.log(`Total score: ${cumulativeScore + player.score}`);
+            checkLevelUp(); // Check if the new score affects the level
+        } else {
+            console.log("Invalid score. Please enter a non-negative number.");
+        }
+    },
+    setCumulativeScore: (newScore) => {
+        if (newScore >= 0) {
+            cumulativeScore = newScore;
+            console.log(`Cumulative score set to ${cumulativeScore}`);
+            console.log(`Total score: ${cumulativeScore + player.score}`);
+        } else {
+            console.log("Invalid score. Please enter a non-negative number.");
+        }
     },
     spawnEnemy: (type) => {
         if (ENEMY_TYPES[type]) {
@@ -1152,7 +1207,7 @@ function initializeGame() {
     // Add keyboard event listeners
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
+    displayLeaderboard();
     initGame();
 }
 

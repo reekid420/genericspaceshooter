@@ -2,25 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Space Shooter</title>
-    <link rel="stylesheet" href="style2.css">
+    <link rel="stylesheet" href="game.css">
+    <script src="game.js"></script>
+    <script src="leaderboard.js"></script>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-
-    <div class="social-links">
-        <a href="https://github.com/reekid96/genericspaceshooter" class="social-link" target="_blank">
-            <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo">
-            GitHub
-        </a>
-        <a href="https://discord.gg/jxV93SwN" class="social-link" target="_blank">
-            <img src="https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6a49cf127bf92de1e2_icon_clyde_blurple_RGB.png" alt="Discord Logo">
-            Discord
-        </a>
+    <div id="ui-overlay">
+        <div id="leaderboard-controls">
+            <button onclick="toggleLeaderboard()">Toggle Leaderboard</button>
+        </div>
+        <div id="leaderboard" style="display: none;"></div>
     </div>
-
-    <script src="game.js"></script>
 </body>
 </html>

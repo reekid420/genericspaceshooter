@@ -1,10 +1,12 @@
  body{
+  background-image: url("images/bg.jpg");
+  font-family: Arial,sans-serif;
   padding: 0px;
   margin: 0px;
 }
      
 header{
-  padding: 0px;
+  padding: 10px;
   margin: 0px; 
 }
     
@@ -14,7 +16,6 @@ header{
   gap: 20px;
   padding: 3px;
   padding-right: 7px;
-  font-family: sans-serif;
 }
         
 .social-link {
