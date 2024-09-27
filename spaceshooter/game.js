@@ -53,28 +53,28 @@ const ENEMY_TYPES = {
 
 // Image loading
 const playerImage = new Image();
-playerImage.src = '../images/player.jpg';
+playerImage.src = '../images/player.webp';
 
 const enemyImage = new Image();
-enemyImage.src = '../images/basic&bigboss.jpg';
+enemyImage.src = '../images/basic&bigboss.webp';
 
 const explosionImage = new Image();
-explosionImage.src = '../images/explosion.jpg';
+explosionImage.src = '../images/explosion.webp';
 
 const finalBossImage = new Image();
-finalBossImage.src = '../images/final-boss.jpg';
+finalBossImage.src = '../images/final-boss.webp';
 
 const blueShipImage = new Image();
-blueShipImage.src = '../images/blue_ship.jpg';
+blueShipImage.src = '../images/blue_ship.webp';
 
 const specialEnemyImage = new Image();
-specialEnemyImage.src = '../images/nokotan.jpg';
+specialEnemyImage.src = '../images/nokotan.webp';
 
 const congratsImage = new Image();
-congratsImage.src = '../images/diegos-waifu.jpg';
+congratsImage.src = '../images/diegos-waifu.webp';
 
 const freakyShipImage = new Image();
-freakyShipImage.src = '../images/freaky_ship.jpg';
+freakyShipImage.src = '../images/freaky_ship.webp';
 
 function initGame() {
     window.removeEventListener('keydown', handleRestart);
