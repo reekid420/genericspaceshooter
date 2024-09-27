@@ -25,6 +25,10 @@ let activeSlider = null;
 let cumulativeScore = 0;
 let isNewGamePlus = false;
 let bulletDamage = 1;
+let sounds = {};
+let localSounds = {};
+let soundsLoaded = false;
+
 
 // Constants
 const COLORS = {
@@ -50,10 +54,7 @@ const ENEMY_TYPES = {
     finalBoss: { health: 1000, speed: 2, size: 150, color: '#FF1493', score: 100000 },
     special: { health: 200, speed: 1, size: 50, color: '#800080', score: 1000 }
 };
-const enemyExplosionSound = new Audio('../sounds/explosion.mp3');
-const shootSound = new Audio('../sounds/shoot.mp3');
-const gameOverSound = new Audio('../sounds/game_over.mp3');
-const victorySound = new Audio('../sounds/victory.mp3');
+
 // Image loading
 const playerImage = new Image();
 playerImage.src = '../images/player.webp';
@@ -78,8 +79,97 @@ congratsImage.src = '../images/diegos-waifu.webp';
 
 const freakyShipImage = new Image();
 freakyShipImage.src = '../images/freaky_ship.webp';
+function loadLocalSounds() {
+    const soundFiles = {
+        enemyExplosion: '../sounds/explosion.mp3',
+        shoot: '../sounds/shoot.mp3',
+        gameOver: '../sounds/game_over.mp3',
+        victory: '../sounds/victory.mp3'
+    };
 
-function initGame() {
+    for (const [key, path] of Object.entries(soundFiles)) {
+        localSounds[key] = new Audio(path);
+        localSounds[key].addEventListener('canplaythrough', () => {
+            console.log(`Loaded local sound: ${key}`);
+        });
+        localSounds[key].addEventListener('error', (e) => {
+            console.error(`Error loading local sound ${key}:`, e);
+        });
+    }
+}
+// Function to load the SoundCloud Widget API
+function loadSoundCloudWidgetAPI() {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://w.soundcloud.com/player/api.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.body.appendChild(script);
+    });
+}
+
+// Function to create a SoundCloud Widget
+function createSoundCloudWidget(trackUrl) {
+    const iframe = document.createElement('iframe');
+    iframe.width = "100";
+    iframe.height = "100";
+    iframe.allow = "autoplay";
+    iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(trackUrl)}&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false`;
+    iframe.style.display = 'none';  // Hide the iframe
+    document.body.appendChild(iframe);
+    return SC.Widget(iframe);
+}
+
+// Function to initialize SoundCloud Widgets
+async function initializeSoundCloudWidgets() {
+    await loadSoundCloudWidgetAPI();
+
+    const soundUrls = {
+        enemyExplosion: 'https://soundcloud.com/purple-guy-774405712/explosion',
+        shoot: 'https://soundcloud.com/purple-guy-774405712/shoot',
+        gameOver: 'https://soundcloud.com/purple-guy-774405712/game-over',
+        victory: 'https://soundcloud.com/purple-guy-774405712/victory'
+    };
+
+    for (const [key, url] of Object.entries(soundUrls)) {
+        try {
+            sounds[key] = createSoundCloudWidget(url);
+            console.log(`Created widget for ${key} sound`);
+        } catch (error) {
+            console.error(`Error creating widget for ${key} sound:`, error);
+        }
+    }
+}
+
+// Function to play sounds
+function playSound(soundName) {
+    if (!soundsLoaded) {
+        console.warn('Sounds not loaded yet');
+        return;
+    }
+
+    if (localSounds[soundName] && localSounds[soundName].readyState === 4) {
+        localSounds[soundName].currentTime = 0;
+        localSounds[soundName].play().catch(error => {
+            console.error(`Error playing local sound ${soundName}:`, error);
+            fallbackToSoundCloud(soundName);
+        });
+    } else {
+        fallbackToSoundCloud(soundName);
+    }
+}
+
+function fallbackToSoundCloud(soundName) {
+    if (sounds[soundName]) {
+        sounds[soundName].seekTo(0);
+        sounds[soundName].play();
+        console.log(`Falling back to SoundCloud for ${soundName}`);
+    } else {
+        console.warn(`Sound ${soundName} not available`);
+    }
+}
+
+async function initGame() {
     window.removeEventListener('keydown', handleRestart);
     canvas = document.getElementById('gameCanvas');
     if (canvas) {
@@ -118,7 +208,7 @@ function initGame() {
     boss = null;
     bossPhase = 0;
     bulletDamage = 1;
-
+   
     // Set up touch event listeners
     canvas.addEventListener('touchstart', handleTouch, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -128,8 +218,24 @@ function initGame() {
     resizeCanvas();
     createStars();
 
+    loadLocalSounds();
+    try {
+        await initializeSoundCloudWidgets();
+        console.log('SoundCloud Widgets initialized successfully');
+    } catch (error) {
+        console.error('Error initializing SoundCloud Widgets:', error);
+    }
+    soundsLoaded = true;
+    try {
+        await initializeSoundCloudWidgets();
+        console.log('SoundCloud Widgets initialized successfully');
+    } catch (error) {
+        console.error('Error initializing SoundCloud Widgets:', error);
+    }
+
     requestAnimationFrame(gameLoop);
 }
+
 
 function resizeCanvas() {
     if (canvas) {
@@ -138,6 +244,7 @@ function resizeCanvas() {
         updateTouchControls();
     }
 }
+
 
 function createStars() {
     stars = [];
@@ -445,7 +552,7 @@ function checkCollision(rect1, rect2) {
 }
 
 function shoot() {
-    shootSound.play(); // Play shoot sound
+    playSound('shoot'); // Play shoot sound
     const now = Date.now();
     const gun = GUNS[player.currentGun];
     if (now - player.lastShot > gun.cooldown) {
@@ -652,9 +759,9 @@ function checkBulletEnemyCollisions() {
                         size: e.w * 1.5,
                         duration: 30
                     });
-                    enemyExplosionSound.play(); // Play explosion sound
-                    return false;
-                }
+                    playSound('enemyExplosion');
+    return false;
+}
                 bulletHit = true;
             }
             return true;
@@ -743,7 +850,7 @@ function drawHUD() {
 }
 
 function drawGameOver() {
-    gameOverSound.play(); // Play game over sound
+    playSound('gameOver'); // Play game over sound
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -963,7 +1070,7 @@ function checkPlayerBossCollisions() {
 }
 
 function showCongratulationsScreen() {
-    victorySound.play(); // Play victory sound
+    playSound('victory'); // Play victory sound
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -1178,7 +1285,8 @@ const devMenu = {
 
 
 
-function initializeGame() {
+
+async function initializeGame() {
     canvas = document.getElementById('gameCanvas');
     if (!canvas) {
         console.error('Canvas element not found');
@@ -1215,8 +1323,12 @@ function initializeGame() {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     displayLeaderboard();
-    initGame();
+    await initGame();
 }
 
 // Add an event listener for DOMContentLoaded
-document.addEventListener('DOMContentLoaded', initializeGame);
+document.addEventListener('DOMContentLoaded', () => {
+    initializeGame().catch(error => {
+        console.error('Error initializing game:', error);
+    });
+});
