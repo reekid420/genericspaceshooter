@@ -1,18 +1,19 @@
  body{
-  background-image: url("images/bg.webp");
+  background-image: linear-gradient(to right, #000000,#333333);
   font-family: Arial,sans-serif;
   padding: 0px;
   margin: 0px;
 }
-     
-header{
-  padding: 10px;
-  margin: 0px; 
+
+#footer{
+  position: fixed;
+  bottom:0;  
+  margin-left: 600px;
 }
     
 .social-links {
   display: flex;
-  justify-content: right;
+  justify-content: center;
   gap: 20px;
   padding: 3px;
   padding-right: 7px;
@@ -22,6 +23,7 @@ header{
   display: flex;
   align-items: right;
   color: white;
+  text-shadow: 1px 1px 2px black, 0 0 25px blue, 0 0 5px darkblue;
   text-decoration: none;
   font-size: 16px;
 }
@@ -38,11 +40,16 @@ button {
   padding: 10px;
   cursor: pointer;
   margin: 10px;
+  background-color: #888888;
+  color: white;
+  text-shadow: 3px 3px 5px black, 0 0 25px red, 0 0 5px darkred;
+  box-shadow: 10px 10px 5px #dbe9f4;
+
 }
 
 button img {
-  width: 250px;
-  height: 200px;
+  width: 350px;
+  height: 300px;
   margin-bottom: 10px;
 }
 
