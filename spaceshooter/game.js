@@ -50,7 +50,10 @@ const ENEMY_TYPES = {
     finalBoss: { health: 1000, speed: 2, size: 150, color: '#FF1493', score: 100000 },
     special: { health: 200, speed: 1, size: 50, color: '#800080', score: 1000 }
 };
-
+const enemyExplosionSound = new Audio('../sounds/explosion.mp3');
+const shootSound = new Audio('../sounds/shoot.mp3');
+const gameOverSound = new Audio('../sounds/game_over.mp3');
+const victorySound = new Audio('../sounds/victory.mp3');
 // Image loading
 const playerImage = new Image();
 playerImage.src = '../images/player.webp';
@@ -442,6 +445,7 @@ function checkCollision(rect1, rect2) {
 }
 
 function shoot() {
+    shootSound.play(); // Play shoot sound
     const now = Date.now();
     const gun = GUNS[player.currentGun];
     if (now - player.lastShot > gun.cooldown) {
@@ -648,6 +652,7 @@ function checkBulletEnemyCollisions() {
                         size: e.w * 1.5,
                         duration: 30
                     });
+                    enemyExplosionSound.play(); // Play explosion sound
                     return false;
                 }
                 bulletHit = true;
@@ -738,6 +743,7 @@ function drawHUD() {
 }
 
 function drawGameOver() {
+    gameOverSound.play(); // Play game over sound
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -957,6 +963,7 @@ function checkPlayerBossCollisions() {
 }
 
 function showCongratulationsScreen() {
+    victorySound.play(); // Play victory sound
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
