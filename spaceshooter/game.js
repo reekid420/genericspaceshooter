@@ -28,6 +28,7 @@ let bulletDamage = 1;
 let sounds = {};
 let localSounds = {};
 let soundsLoaded = false;
+let gameVolume = 0.5;
 
 
 // Constants
@@ -89,6 +90,7 @@ function loadLocalSounds() {
 
     for (const [key, path] of Object.entries(soundFiles)) {
         localSounds[key] = new Audio(path);
+        localSounds[key].volume = gameVolume;
         localSounds[key].addEventListener('canplaythrough', () => {
             console.log(`Loaded local sound: ${key}`);
         });
@@ -148,12 +150,16 @@ function playSound(soundName) {
         return;
     }
 
-    if (localSounds[soundName] && localSounds[soundName].readyState === 4) {
+    if (localSounds[soundName]) {
+        localSounds[soundName].volume = gameVolume;
         localSounds[soundName].currentTime = 0;
-        localSounds[soundName].play().catch(error => {
-            console.error(`Error playing local sound ${soundName}:`, error);
-            fallbackToSoundCloud(soundName);
-        });
+        let playPromise = localSounds[soundName].play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.error(`Error playing local sound ${soundName}:`, error);
+                fallbackToSoundCloud(soundName);
+            });
+        }
     } else {
         fallbackToSoundCloud(soundName);
     }
@@ -161,6 +167,7 @@ function playSound(soundName) {
 
 function fallbackToSoundCloud(soundName) {
     if (sounds[soundName]) {
+        sounds[soundName].setVolume(gameVolume * 100);
         sounds[soundName].seekTo(0);
         sounds[soundName].play();
         console.log(`Falling back to SoundCloud for ${soundName}`);
@@ -168,7 +175,31 @@ function fallbackToSoundCloud(soundName) {
         console.warn(`Sound ${soundName} not available`);
     }
 }
+function createVolumeControl() {
+    const volumeControl = document.createElement('div');
+    volumeControl.style.position = 'absolute';
+    volumeControl.style.top = '10px';
+    volumeControl.style.right = '10px';
+    volumeControl.style.zIndex = '1000';
+    volumeControl.innerHTML = `
+        <label for="volumeSlider" style="color: white;">Volume: </label>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="${gameVolume}">
+    `;
+    document.body.appendChild(volumeControl);
 
+    const volumeSlider = document.getElementById('volumeSlider');
+    volumeSlider.addEventListener('input', (e) => {
+        gameVolume = parseFloat(e.target.value);
+        // Update volume for all local sounds
+        for (let sound in localSounds) {
+            localSounds[sound].volume = gameVolume;
+        }
+        // Update volume for all SoundCloud widgets
+        for (let sound in sounds) {
+            sounds[sound].setVolume(gameVolume * 100);
+        }
+    });
+}
 async function initGame() {
     window.removeEventListener('keydown', handleRestart);
     canvas = document.getElementById('gameCanvas');
@@ -232,7 +263,7 @@ async function initGame() {
     } catch (error) {
         console.error('Error initializing SoundCloud Widgets:', error);
     }
-
+    createVolumeControl();
     requestAnimationFrame(gameLoop);
 }
 
@@ -328,7 +359,14 @@ function handleTouch(e) {
         const y = touch.clientY - rect.top;
         handleSingleTouch(x, y, touch.identifier);
     }
+    if (localSounds.shoot && localSounds.shoot.paused) {
+        localSounds.shoot.play().then(() => {
+            localSounds.shoot.pause();
+            localSounds.shoot.currentTime = 0;
+        }).catch(error => console.error('Error enabling audio:', error));
+    }
 }
+
 
 function handleTouchMove(e) {
     e.preventDefault();
@@ -552,10 +590,10 @@ function checkCollision(rect1, rect2) {
 }
 
 function shoot() {
-    playSound('shoot'); // Play shoot sound
     const now = Date.now();
     const gun = GUNS[player.currentGun];
     if (now - player.lastShot > gun.cooldown) {
+        playSound('shoot'); 
         player.lastShot = now;
         
         switch (player.currentGun) {
