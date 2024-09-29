@@ -29,6 +29,9 @@ let sounds = {};
 let localSounds = {};
 let soundsLoaded = false;
 let gameVolume = 0.5;
+let shootSoundPool = [];
+let explosionSoundPool = [];
+const SOUND_POOL_SIZE = 5;
 
 
 // Constants
@@ -80,10 +83,9 @@ congratsImage.src = '../images/diegos-waifu.webp';
 
 const freakyShipImage = new Image();
 freakyShipImage.src = '../images/freaky_ship.webp';
+
 function loadLocalSounds() {
     const soundFiles = {
-        enemyExplosion: '../sounds/explosion.mp3',
-        shoot: '../sounds/shoot.mp3',
         gameOver: '../sounds/game_over.mp3',
         victory: '../sounds/victory.mp3'
     };
@@ -98,7 +100,10 @@ function loadLocalSounds() {
             console.error(`Error loading local sound ${key}:`, e);
         });
     }
+
+    initializeSoundPools();
 }
+
 // Function to load the SoundCloud Widget API
 function loadSoundCloudWidgetAPI() {
     return new Promise((resolve, reject) => {
@@ -144,24 +149,54 @@ async function initializeSoundCloudWidgets() {
 }
 
 // Function to play sounds
+function initializeSoundPools() {
+    for (let i = 0; i < SOUND_POOL_SIZE; i++) {
+        let shootSound = new Audio('../sounds/shoot.mp3');
+        shootSound.volume = gameVolume;
+        shootSoundPool.push(shootSound);
+
+        let explosionSound = new Audio('../sounds/explosion.mp3');
+        explosionSound.volume = gameVolume;
+        explosionSoundPool.push(explosionSound);
+    }
+}
+
+function playPooledSound(pool) {
+    for (let sound of pool) {
+        if (sound.paused || sound.ended) {
+            sound.play().catch(error => console.error('Error playing sound:', error));
+            return;
+        }
+    }
+    // If all sounds are playing, play the first one anyway
+    pool[0].currentTime = 0;
+    pool[0].play().catch(error => console.error('Error playing sound:', error));
+}
+
 function playSound(soundName) {
     if (!soundsLoaded) {
         console.warn('Sounds not loaded yet');
         return;
     }
 
-    if (localSounds[soundName]) {
-        localSounds[soundName].volume = gameVolume;
-        localSounds[soundName].currentTime = 0;
-        let playPromise = localSounds[soundName].play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error(`Error playing local sound ${soundName}:`, error);
+    switch(soundName) {
+        case 'shoot':
+            playPooledSound(shootSoundPool);
+            break;
+        case 'enemyExplosion':
+            playPooledSound(explosionSoundPool);
+            break;
+        default:
+            if (localSounds[soundName]) {
+                localSounds[soundName].volume = gameVolume;
+                localSounds[soundName].currentTime = 0;
+                localSounds[soundName].play().catch(error => {
+                    console.error(`Error playing local sound ${soundName}:`, error);
+                    fallbackToSoundCloud(soundName);
+                });
+            } else {
                 fallbackToSoundCloud(soundName);
-            });
-        }
-    } else {
-        fallbackToSoundCloud(soundName);
+            }
     }
 }
 
@@ -187,13 +222,15 @@ function createVolumeControl() {
     `;
     document.body.appendChild(volumeControl);
 
-    const volumeSlider = document.getElementById('volumeSlider');
     volumeSlider.addEventListener('input', (e) => {
         gameVolume = parseFloat(e.target.value);
         // Update volume for all local sounds
         for (let sound in localSounds) {
             localSounds[sound].volume = gameVolume;
         }
+        // Update volume for sound pools
+        shootSoundPool.forEach(sound => sound.volume = gameVolume);
+        explosionSoundPool.forEach(sound => sound.volume = gameVolume);
         // Update volume for all SoundCloud widgets
         for (let sound in sounds) {
             sounds[sound].setVolume(gameVolume * 100);
@@ -270,8 +307,18 @@ async function initGame() {
 
 function resizeCanvas() {
     if (canvas) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const isLandscape = window.innerWidth > window.innerHeight;
+        if (isLandscape) {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Adjust for mobile browsers' UI
+            setTimeout(() => {
+                canvas.height = window.innerHeight;
+            }, 100);
+        } else {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
         updateTouchControls();
     }
 }
@@ -309,15 +356,21 @@ function updateTouchControls() {
     const canvas = document.getElementById('gameCanvas');
     if (!canvas) return;
     
-    const buttonSize = Math.min(80, canvas.width / 8);
-    const gap = 5;
-    const sliderHeight = canvas.height * 0.6;
+    const isLandscape = canvas.width > canvas.height;
+    const buttonSize = Math.min(120, canvas.width / 6);
+    const gap = 20;
+    const sliderHeight = isLandscape ? canvas.height * 0.8 : canvas.height * 0.6;
     const sliderWidth = buttonSize / 2;
     
     touchControls = {
         moveSlider: { x: 20, y: (canvas.height - sliderHeight) / 2, w: sliderWidth, h: sliderHeight, value: 0.5 },
         speedSlider: { x: canvas.width - sliderWidth - 20, y: (canvas.height - sliderHeight) / 2, w: sliderWidth, h: sliderHeight, value: 0.5 },
-        shoot: { x: canvas.width - buttonSize - gap - 60, y: canvas.height - buttonSize - gap, w: buttonSize, h: buttonSize }
+        shoot: { 
+            x: isLandscape ? canvas.width - buttonSize * 1.5 - gap : canvas.width / 2 - buttonSize, 
+            y: canvas.height - buttonSize - gap, 
+            w: buttonSize, 
+            h: buttonSize 
+        }
     };
 }
 
@@ -337,12 +390,17 @@ function drawTouchControls() {
     }
     
     const { x, y, w, h } = touchControls.shoot;
+    ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 20px Arial';
-    ctx.fillText('SHOOT', x + 10, y + 45);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SHOOT', x + w / 2, y + h / 2);
     
     ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
 }
 
 function handleTouch(e) {
@@ -358,12 +416,6 @@ function handleTouch(e) {
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
         handleSingleTouch(x, y, touch.identifier);
-    }
-    if (localSounds.shoot && localSounds.shoot.paused) {
-        localSounds.shoot.play().then(() => {
-            localSounds.shoot.pause();
-            localSounds.shoot.currentTime = 0;
-        }).catch(error => console.error('Error enabling audio:', error));
     }
 }
 
@@ -388,12 +440,14 @@ function handleTouchEnd(e) {
     for (let i = 0; i < touches.length; i++) {
         const touch = touches[i];
         if (activeTouches[touch.identifier]) {
+            if (activeTouches[touch.identifier].control === 'shoot') {
+                keys.shoot = false;
+            }
             delete activeTouches[touch.identifier];
         }
     }
     if (Object.keys(activeTouches).length === 0) {
         activeSlider = null;
-        keys.shoot = false;
     }
 }
 
@@ -593,7 +647,7 @@ function shoot() {
     const now = Date.now();
     const gun = GUNS[player.currentGun];
     if (now - player.lastShot > gun.cooldown) {
-        playSound('shoot'); 
+        playSound('shoot');
         player.lastShot = now;
         
         switch (player.currentGun) {
@@ -1337,7 +1391,9 @@ async function initializeGame() {
 
     // Add event listener for window resize and orientation change
     window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('orientationchange', resizeCanvas);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(resizeCanvas, 100);
+    });
 
     // Remove existing listeners to prevent duplicates
     canvas.removeEventListener('touchstart', handleTouch);

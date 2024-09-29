@@ -78,8 +78,13 @@ body, html {
 }
 
 @media screen and (orientation: landscape) {
+    body {
+        height: 100vh;
+        height: -webkit-fill-available;
+    }
     #gameCanvas {
         width: 100vw;
         height: 100vh;
+        height: -webkit-fill-available;
     }
 }
