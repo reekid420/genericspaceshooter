@@ -3,20 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Space Shooter</title>
     <link rel="stylesheet" href="game.css">
-    <script src="game.js"></script>
-    <script src="leaderboard.js"></script>
-    
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
     <div id="ui-overlay">
-        <div id="leaderboard-controls">
-            <button onclick="toggleLeaderboard()">Toggle Leaderboard</button>
+        <div id="volumeControl">
+            <label for="volumeSlider">Volume: </label>
+            <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.5">
         </div>
+        <button id="leaderboard-toggle">Toggle Leaderboard</button>
         <div id="leaderboard" style="display: none;"></div>
     </div>
+    
+    <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+
+    <!-- Add Firebase products that you want to use -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <script src="leaderboard.js"></script>
+    <script src="game.js"></script>
 </body>
 </html>

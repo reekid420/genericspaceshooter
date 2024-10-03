@@ -84,6 +84,9 @@ congratsImage.src = '../images/diegos-waifu.webp';
 const freakyShipImage = new Image();
 freakyShipImage.src = '../images/freaky_ship.webp';
 
+const miniBossImage = new Image();
+miniBossImage.src = '../images/miniboss.webp';
+
 function loadLocalSounds() {
     const soundFiles = {
         gameOver: '../sounds/game_over.mp3',
@@ -211,7 +214,14 @@ function fallbackToSoundCloud(soundName) {
     }
 }
 function createVolumeControl() {
+    // Remove any existing volume control to avoid duplicates
+    const existingControl = document.getElementById('volumeControl');
+    if (existingControl) {
+        existingControl.remove();
+    }
+
     const volumeControl = document.createElement('div');
+    volumeControl.id = 'volumeControl';
     volumeControl.style.position = 'absolute';
     volumeControl.style.top = '10px';
     volumeControl.style.right = '10px';
@@ -222,28 +232,72 @@ function createVolumeControl() {
     `;
     document.body.appendChild(volumeControl);
 
-    volumeSlider.addEventListener('input', (e) => {
-        gameVolume = parseFloat(e.target.value);
-        // Update volume for all local sounds
-        for (let sound in localSounds) {
-            localSounds[sound].volume = gameVolume;
-        }
-        // Update volume for sound pools
-        shootSoundPool.forEach(sound => sound.volume = gameVolume);
-        explosionSoundPool.forEach(sound => sound.volume = gameVolume);
-        // Update volume for all SoundCloud widgets
-        for (let sound in sounds) {
-            sounds[sound].setVolume(gameVolume * 100);
-        }
-    });
+    const volumeSlider = document.getElementById('volumeSlider');
+    if (volumeSlider) {
+        volumeSlider.addEventListener('input', (e) => {
+            gameVolume = parseFloat(e.target.value);
+            // Update volume for all local sounds
+            for (let sound in localSounds) {
+                localSounds[sound].volume = gameVolume;
+            }
+            // Update volume for sound pools
+            shootSoundPool.forEach(sound => sound.volume = gameVolume);
+            explosionSoundPool.forEach(sound => sound.volume = gameVolume);
+            // Update volume for all SoundCloud widgets
+            for (let sound in sounds) {
+                if (sounds[sound] && sounds[sound].setVolume) {
+                    sounds[sound].setVolume(gameVolume * 100);
+                }
+            }
+        });
+    } else {
+        console.error('Volume slider element not found');
+    }
 }
-async function initGame() {
+function createUIOverlay() {
+    const uiOverlay = document.getElementById('ui-overlay');
+    if (!uiOverlay) {
+        console.error('UI overlay element not found');
+        return;
+    }
+
+    // Clear existing content
+    uiOverlay.innerHTML = '';
+
+    // Create volume control
+    createVolumeControl();
+
+    // Create leaderboard toggle button
+    const toggleButton = document.createElement('button');
+    toggleButton.id = 'leaderboard-toggle';
+    toggleButton.textContent = 'Toggle Leaderboard';
+    toggleButton.addEventListener('click', toggleLeaderboard);
+    uiOverlay.appendChild(toggleButton);
+
+    // Create leaderboard container
+    const leaderboardContainer = document.createElement('div');
+    leaderboardContainer.id = 'leaderboard';
+    leaderboardContainer.style.display = 'none';
+    uiOverlay.appendChild(leaderboardContainer);
+}
+function setupGameOverListeners() {
+    // Remove any existing event listeners to prevent duplicates
     window.removeEventListener('keydown', handleRestart);
-    canvas = document.getElementById('gameCanvas');
     if (canvas) {
         canvas.removeEventListener('touchstart', handleRestart);
     }
+
+    // Add event listeners for restart
+    window.addEventListener('keydown', handleRestart);
+    if (canvas) {
+        canvas.addEventListener('touchstart', handleRestart);
+    }
+}
+async function initGame() {
+    window.removeEventListener('keydown', handleRestart);
     
+    // Get the canvas element
+    canvas = document.getElementById('gameCanvas');
     if (!canvas) {
         console.error('Canvas element not found');
         return;
@@ -251,27 +305,42 @@ async function initGame() {
     
     ctx = canvas.getContext('2d');
     
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Set canvas size
+    resizeCanvas();
     
-    if (isNewGamePlus) {
-        cumulativeScore += player.score; // Add the previous game's score to the cumulative score
-    } else {
-        cumulativeScore = 0; // Reset cumulative score for a fresh start
+    if (canvas) {
+        canvas.removeEventListener('touchstart', handleRestart);
     }
     
+    if (isNewGamePlus) {
+        cumulativeScore += player ? player.score : 0;
+    } else {
+        cumulativeScore = 0;
+    }
+    
+    // Initialize game state
+    gameOver = false;
+    gameOverSoundPlayed = false;
     player = {
-        x: 50, y: canvas.height / 2, w: 50, h: 30, baseSpeed: 5, speed: 5,
-        minSpeed: 1, maxSpeed: 20,
+        x: 50,
+        y: canvas.height / 2,
+        w: 50,
+        h: 30,
+        speed: 5,
+        baseSpeed: 5,
+        minSpeed: 1,
+        maxSpeed: 20,
+        health: 100,
+        score: 0,
+        currentGun: 'default',
+        gunDuration: 0,
+        lastShot: 0,
         damageInvulnerable: 0,
-        health: 100, score: 0, lastShot: 0, invulnerable: 0,
-        currentGun: 'default', gunDuration: 0,
-        invincible: false,
+        invincible: false
     };
 
     bullets = []; enemies = []; powerUps = []; stars = []; explosions = [];
-    gameOver = false; 
-    level = 1; // Always reset level to 1
+    level = 1;
     showDevMenu = false;
     boss = null;
     bossPhase = 0;
@@ -283,7 +352,6 @@ async function initGame() {
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
     canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
-    resizeCanvas();
     createStars();
 
     loadLocalSounds();
@@ -294,14 +362,44 @@ async function initGame() {
         console.error('Error initializing SoundCloud Widgets:', error);
     }
     soundsLoaded = true;
-    try {
-        await initializeSoundCloudWidgets();
-        console.log('SoundCloud Widgets initialized successfully');
-    } catch (error) {
-        console.error('Error initializing SoundCloud Widgets:', error);
+    
+    // Add volume control event listener
+    const volumeSlider = document.getElementById('volumeSlider');
+    if (volumeSlider) {
+        volumeSlider.value = gameVolume;
+        volumeSlider.addEventListener('input', function(e) {
+            gameVolume = parseFloat(e.target.value);
+            updateAllSoundVolumes();
+        });
     }
-    createVolumeControl();
+    
+    createUIOverlay();
+    
+    setupGameOverListeners();
+
+    if (typeof displayLeaderboard === 'function') {
+        displayLeaderboard();
+    } else {
+        console.error('displayLeaderboard function not found');
+    }
+
     requestAnimationFrame(gameLoop);
+}
+
+function updateAllSoundVolumes() {
+    // Update volume for all local sounds
+    for (let sound in localSounds) {
+        localSounds[sound].volume = gameVolume;
+    }
+    // Update volume for sound pools
+    shootSoundPool.forEach(sound => sound.volume = gameVolume);
+    explosionSoundPool.forEach(sound => sound.volume = gameVolume);
+    // Update volume for all SoundCloud widgets
+    for (let sound in sounds) {
+        if (sounds[sound] && sounds[sound].setVolume) {
+            sounds[sound].setVolume(gameVolume * 100);
+        }
+    }
 }
 
 
@@ -577,9 +675,12 @@ function drawEnemy(e) {
         ctx.drawImage(blueShipImage, e.x, e.y, e.w, e.h);
     } else if (e.type === 'fast' && freakyShipImage.complete) {
         ctx.drawImage(freakyShipImage, e.x, e.y, e.w, e.h);
+    } else if (e.type === 'miniBoss' && miniBossImage.complete) {
+        ctx.drawImage(miniBossImage, e.x, e.y, e.w, e.h);
     } else {
         drawDetailedShip(e.x, e.y, e.w, e.h, e.color, false, e.type);
     }
+    
     
     if (e.type === 'miniBoss' || e.type === 'bigBoss' || e.type === 'special') {
         const healthPercentage = e.health / e.maxHealth;
@@ -1273,7 +1374,7 @@ function gameLoop(currentTime) {
 }
 
 function handleRestart(e) {
-    if (e.code === 'Space' || e.type === 'touchstart') {
+    if ((e.code === 'Space' || e.type === 'touchstart') && gameOver) {
         e.preventDefault();
         
         // Submit the score before starting a new game
