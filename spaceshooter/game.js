@@ -232,28 +232,32 @@ function createVolumeControl() {
     `;
     document.body.appendChild(volumeControl);
 
-    const volumeSlider = document.getElementById('volumeSlider');
-    if (volumeSlider) {
-        volumeSlider.addEventListener('input', (e) => {
-            gameVolume = parseFloat(e.target.value);
-            // Update volume for all local sounds
-            for (let sound in localSounds) {
-                localSounds[sound].volume = gameVolume;
-            }
-            // Update volume for sound pools
-            shootSoundPool.forEach(sound => sound.volume = gameVolume);
-            explosionSoundPool.forEach(sound => sound.volume = gameVolume);
-            // Update volume for all SoundCloud widgets
-            for (let sound in sounds) {
-                if (sounds[sound] && sounds[sound].setVolume) {
-                    sounds[sound].setVolume(gameVolume * 100);
+    // Use a small delay to ensure the element is in the DOM
+    setTimeout(() => {
+        const volumeSlider = document.getElementById('volumeSlider');
+        if (volumeSlider) {
+            volumeSlider.addEventListener('input', (e) => {
+                gameVolume = parseFloat(e.target.value);
+                // Update volume for all local sounds
+                for (let sound in localSounds) {
+                    localSounds[sound].volume = gameVolume;
                 }
-            }
-        });
-    } else {
-        console.error('Volume slider element not found');
-    }
+                // Update volume for sound pools
+                shootSoundPool.forEach(sound => sound.volume = gameVolume);
+                explosionSoundPool.forEach(sound => sound.volume = gameVolume);
+                // Update volume for all SoundCloud widgets
+                for (let sound in sounds) {
+                    if (sounds[sound] && sounds[sound].setVolume) {
+                        sounds[sound].setVolume(gameVolume * 100);
+                    }
+                }
+            });
+        } else {
+            console.error('Volume slider element not found');
+        }
+    }, 0);
 }
+
 function createUIOverlay() {
     const uiOverlay = document.getElementById('ui-overlay');
     if (!uiOverlay) {
@@ -376,7 +380,7 @@ async function initGame() {
     createUIOverlay();
     
     setupGameOverListeners();
-
+    setTimeout(createVolumeControl, 100);
     if (typeof displayLeaderboard === 'function') {
         displayLeaderboard();
     } else {
