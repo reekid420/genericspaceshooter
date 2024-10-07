@@ -1,7 +1,7 @@
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
-const API_URL = 'http://localhost:3000/api'; // Replace with your actual server URL
+const API_URL = 'https://server2-88pt.onrender.com/api';
 
 function getLeaderboard() {
     return fetch(`${API_URL}/leaderboard`)
