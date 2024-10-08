@@ -32,7 +32,124 @@ let gameVolume = 0.5;
 let shootSoundPool = [];
 let explosionSoundPool = [];
 const SOUND_POOL_SIZE = 5;
+let isLoggedIn = false;
+let currentUser = null;
+let isDevUser = false;
 
+const db = firebase.firestore();
+const rtdb = firebase.database()
+
+function showLoginOverlay() {
+    const loginOverlay = document.getElementById('loginOverlay');
+    if (loginOverlay) {
+        loginOverlay.style.display = 'flex';
+    }
+}
+
+function hideLoginOverlay() {
+    document.getElementById('loginOverlay').style.display = 'none';
+}
+
+window.handleLogin = async function() {
+    console.log('handleLogin function called');
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+
+    try {
+        console.log(`Sending request to ${API_URL}/login`);
+        const response = await fetch(`${API_URL}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+            mode: 'cors',
+            credentials: 'include'
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+
+        if (data.success) {
+            isLoggedIn = true;
+            currentUser = username;
+console.log('Current user set to:', currentUser);
+            isDevUser = data.isDevUser;
+            hideLoginOverlay();
+            if (isDevUser) {
+                devMenuUnlocked = true;
+                createDevMenuButton();
+            }
+            await startGame();
+        } else {
+            document.getElementById('loginMessage').textContent = data.message || 'Invalid username or password';
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        document.getElementById('loginMessage').textContent = 'An error occurred. Please try again.';
+    }
+}
+
+
+async function handleRegistration(username, password) {
+    try {
+        const response = await fetch(`${API_URL}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password }),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Registration successful! You can now log in.');
+            // Automatically log in after successful registration
+            await handleLogin({ preventDefault: () => {} });
+        } else {
+            alert(data.message || 'Registration failed. Please try again.');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        alert('An error occurred during registration. Please try again.');
+    }
+}
+
+
+function addScoreToLeaderboard(name, score) {
+    console.log(`Adding score to leaderboard: ${name}, ${score}`); // Add this line for debugging
+    return fetch(`${API_URL}/leaderboard`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username: name, score: score }),
+        credentials: 'include'
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            console.log('Score added to leaderboard successfully');
+        } else {
+            console.error('Failed to add score to leaderboard:', data.message);
+        }
+    })
+    .catch((error) => {
+        console.error("Error adding score to leaderboard:", error);
+    });
+}
 
 // Constants
 const COLORS = {
@@ -269,12 +386,19 @@ function createUIOverlay() {
     uiOverlay.innerHTML = '';
 
     // Create volume control
-    createVolumeControl();
+    const volumeControl = document.createElement('div');
+    volumeControl.id = 'volumeControl';
+    volumeControl.innerHTML = `
+        <label for="volumeSlider" style="color: white;">Volume: </label>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="${gameVolume}">
+    `;
+    uiOverlay.appendChild(volumeControl);
 
     // Create leaderboard toggle button
     const toggleButton = document.createElement('button');
     toggleButton.id = 'leaderboard-toggle';
     toggleButton.textContent = 'Toggle Leaderboard';
+    toggleButton.style.marginTop = '20px'; // Add some space between volume control and button
     toggleButton.addEventListener('click', toggleLeaderboard);
     uiOverlay.appendChild(toggleButton);
 
@@ -283,7 +407,17 @@ function createUIOverlay() {
     leaderboardContainer.id = 'leaderboard';
     leaderboardContainer.style.display = 'none';
     uiOverlay.appendChild(leaderboardContainer);
+
+    // Add volume control event listener
+    const volumeSlider = document.getElementById('volumeSlider');
+    if (volumeSlider) {
+        volumeSlider.addEventListener('input', function(e) {
+            gameVolume = parseFloat(e.target.value);
+            updateAllSoundVolumes();
+        });
+    }
 }
+
 function setupGameOverListeners() {
     // Remove any existing event listeners to prevent duplicates
     window.removeEventListener('keydown', handleRestart);
@@ -297,7 +431,7 @@ function setupGameOverListeners() {
         canvas.addEventListener('touchstart', handleRestart);
     }
 }
-async function initGame() {
+async function startGame() {
     window.removeEventListener('keydown', handleRestart);
     
     // Get the canvas element
@@ -351,6 +485,9 @@ async function initGame() {
     bulletDamage = 1;
    
     // Set up touch event listeners
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    canvas.addEventListener('click', handleDevMenuInteraction);
     canvas.addEventListener('touchstart', handleTouch, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
@@ -388,6 +525,7 @@ async function initGame() {
     }
 
     requestAnimationFrame(gameLoop);
+    
 }
 
 function updateAllSoundVolumes() {
@@ -613,8 +751,6 @@ function updatePlayerPosition() {
     // Shooting
     if (keys.Space || keys.shoot) shoot();
 
-    // Check for dev menu unlock
-    checkDevMenuUnlock();
 }
 
 function resetControls() {
@@ -815,7 +951,7 @@ function drawDebugOverlay() {
 function drawDevMenu() {
     const menuWidth = Math.min(300, canvas.width * 0.8);
     const menuItemHeight = 40;
-    const menuItemCount = 8; 
+    const menuItemCount = 9; 
     const menuHeight = (menuItemCount + 1) * menuItemHeight;
     
     const menuStartX = (canvas.width - menuWidth) / 2;
@@ -829,7 +965,8 @@ function drawDevMenu() {
 
     const menuItems = [
         'Set Level', 'Set Health', 'Set Gun', 'Set Score',
-        'Set Cumulative Score', 'Spawn Enemy', 'Clear Enemies', 'Set Bullet Damage'
+        'Set Cumulative Score', 'Spawn Enemy', 'Clear Enemies', 'Set Bullet Damage',
+        'Toggle Invincibility' 
     ];
 
     menuItems.forEach((item, index) => {
@@ -838,32 +975,6 @@ function drawDevMenu() {
         ctx.fillStyle = 'white';
         ctx.fillText(item, menuStartX + 10, menuStartY + (index + 2) * menuItemHeight - 10);
     });
-}
-
-
-function checkDevMenuUnlock() {
-    const now = Date.now();
-    if (player.y <= player.h && player.speed >= 1 && player.speed <= 2) {
-        if (now - lastShotTime <= 2000) {
-            rapidShotCount++;
-            if (rapidShotCount >= 15) {
-                unlockDevMenu();
-            }
-        } else {
-            rapidShotCount = 1;
-        }
-        lastShotTime = now;
-    } else {
-        rapidShotCount = 0;
-    }
-}
-
-function unlockDevMenu() {
-    if (!devMenuUnlocked) {
-        devMenuUnlocked = true;
-        console.log("Dev menu unlocked. Press 'P' to toggle.");
-        createDevMenuButton();
-    }
 }
 
 function createDevMenuButton() {
@@ -1039,10 +1150,10 @@ function drawHUD() {
     if (isMobile) {
         ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Total: ${cumulativeScore + player.score}`, 10, yPosition);
         ctx.fillText(`Level: ${level} | Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun}`, 10, yPosition + 30);
-        ctx.fillText(`Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, yPosition + 60);
+        ctx.fillText(`Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'} | Invincible: ${player.invincible ? 'Yes' : 'No'}`, 10, yPosition + 60);
     } else {
         ctx.fillText(`Health: ${player.health} | Score: ${player.score} | Total: ${cumulativeScore + player.score} | Level: ${level}`, 10, yPosition);
-        ctx.fillText(`Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun} | Invuln: ${player.damageInvulnerable > 0 ? 'Yes' : 'No'}`, 10, yPosition + 30);
+        ctx.fillText(`Speed: ${player.speed.toFixed(1)} | Gun: ${player.currentGun}`, 10, yPosition + 30);
     }
 }
 
@@ -1115,7 +1226,7 @@ function handleDevMenuInteraction(e) {
 
     const menuWidth = Math.min(300, canvas.width * 0.8);
     const menuItemHeight = 40;
-    const menuItemCount = 8;
+    const menuItemCount = 9;
     const menuHeight = (menuItemCount + 1) * menuItemHeight;
     
     const menuStartX = (canvas.width - menuWidth) / 2;
@@ -1157,6 +1268,9 @@ function handleDevMenuInteraction(e) {
             case 7:
                 const newBulletDamage = prompt("Enter new bullet damage:", bulletDamage);
                 if (newBulletDamage) devMenu.setBulletDamage(parseInt(newBulletDamage));
+                break;
+            case 8: 
+                devMenu.toggleInvincibility();
                 break;
         }
     }
@@ -1349,7 +1463,6 @@ function gameLoop(currentTime) {
         updateAndDrawPowerUps();
         drawExplosions();
         checkCollisions();
-        drawTouchControls();
         updateGunDuration();
         drawHUD();
         checkLevelUp();
@@ -1383,16 +1496,18 @@ function handleRestart(e) {
         
         // Submit the score before starting a new game
         const totalScore = cumulativeScore + player.score;
-        promptForName(totalScore);
+        console.log(`Submitting score: ${currentUser}, ${totalScore}`); // Add this line for debugging
+        addScoreToLeaderboard(currentUser, totalScore);
         
         // Remove the event listeners
         window.removeEventListener('keydown', handleRestart);
         canvas.removeEventListener('touchstart', handleRestart);
         
-        initGame();
+        startGame();
         displayLeaderboard(); // Update leaderboard display
     }
 }
+
 function handleKeyDown(e) {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
         keys[e.code] = true;
@@ -1484,6 +1599,10 @@ const devMenu = {
 
 
 async function initializeGame() {
+    if (!isLoggedIn) {
+        showLoginOverlay();
+        return;
+    }
     canvas = document.getElementById('gameCanvas');
     if (!canvas) {
         console.error('Canvas element not found');
@@ -1522,12 +1641,19 @@ async function initializeGame() {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     displayLeaderboard();
-    await initGame();
-}
+    await startGame();
+    }
+
 
 // Add an event listener for DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-    initializeGame().catch(error => {
-        console.error('Error initializing game:', error);
-    });
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    } else {
+        console.error('Login form not found');
+    }
+
+    console.log('DOM fully loaded');
+    showLoginOverlay();
 });
